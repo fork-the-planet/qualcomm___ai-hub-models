@@ -311,29 +311,23 @@ def update_code_gen_accuracy_failure_reasons(
 
 def update_model_publish_status(model_info: QAIHMModelInfo) -> bool:
     """Update the model publishing status based on failure reasons. Returns true if the status was changed, false otherwise."""
-    cg = model_info.code_gen_config
-
     # Update model status & reason, if applicable
+    can_promote, reason = model_info.can_promote_to_published()
     if model_info.status == MODEL_STATUS.PENDING:
-        can_promote, reason = model_info.can_promote_to_published()
         if can_promote:
             model_info.status = MODEL_STATUS.PUBLISHED
             model_info.status_reason = None
             print(f"{model_info.id} | Set model to PUBLISHED")
             return True
-        if cg.supports_at_least_1_runtime:
-            # Model has passing runtimes but is missing other requirements
-            print(f"{model_info.id} | Skipping promotion to PUBLISHED: {reason}")
-    elif (
-        not cg.supports_at_least_1_runtime
-        and model_info.status == MODEL_STATUS.PUBLISHED
-    ):
-        # Demote PUBLISHED to PENDING if no longer eligible
-        model_info.status = MODEL_STATUS.PENDING
-        model_info.status_reason = "No successful runtimes in scorecard (this field was auto-populated by the scorecard run)"
-        print(f"{model_info.id} | Set model to PENDING (no successful runtimes)")
-        return True
-    # Note: PENDING stays PENDING if no successful runtimes yet
+        # Model has passing runtimes but is missing other requirements
+        print(f"{model_info.id} | Skipping promotion to PUBLISHED: {reason}")
+    elif model_info.status == MODEL_STATUS.PUBLISHED:
+        if not can_promote:
+            # Demote PUBLISHED to PENDING if no longer eligible
+            model_info.status = MODEL_STATUS.PENDING
+            model_info.status_reason = reason
+            print(f"{model_info.id} | Set model to PENDING ({reason})")
+            return True
 
     return False
 

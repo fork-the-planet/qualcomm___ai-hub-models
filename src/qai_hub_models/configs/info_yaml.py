@@ -365,21 +365,18 @@ class QAIHMModelInfo(BaseQAIHMConfig):
                 "Arxiv links should be `abs` links, not link directly to pdfs."
             )
 
-        # Whether this model has a page on the website
-        model_is_available = self.status == MODEL_STATUS.PUBLISHED
-        # Whether this model can actually be downloaded by the public
-        model_is_accessible = not self.restrict_model_sharing
+        # Status
+        if self.status == MODEL_STATUS.PUBLISHED:
+            can_be_published, reason = self.can_promote_to_published()
+            if not can_be_published:
+                raise ValueError(f"Model cannot be published: {reason}")
 
         # License validation
-        if not self.license and model_is_available and model_is_accessible:
+        if not self.license and self.license_type != MODEL_LICENSE.COMMERCIAL:
             raise ValueError("license cannot be empty")
         if self.license_type.url is not None and self.license != self.license_type.url:
             raise ValueError(
                 f"License {self.license_type!s} must have URL {self.license_type.url}"
-            )
-        if self.license_type.is_non_commerical and model_is_available:
-            raise ValueError(
-                f"Models with license {self.license_type!s} cannot be published"
             )
 
         # Status Reason
@@ -468,12 +465,6 @@ class QAIHMModelInfo(BaseQAIHMConfig):
             if not self.llm_details:
                 raise ValueError("llm_details must be set if model type is LLM")
 
-            model_is_available = self.llm_details.call_to_action not in [
-                LLM_CALL_TO_ACTION.CONTACT_FOR_PURCHASE,
-                LLM_CALL_TO_ACTION.COMING_SOON,
-                LLM_CALL_TO_ACTION.CONTACT_US,
-            ]
-
             if self.llm_details.call_to_action in {
                 LLM_CALL_TO_ACTION.DOWNLOAD,
                 LLM_CALL_TO_ACTION.DOWNLOAD_AND_VIEW_README,
@@ -535,11 +526,29 @@ class QAIHMModelInfo(BaseQAIHMConfig):
 
         Returns (True, "") if promotion is safe, or (False, reason) if not.
         """
+        if self.license_type.is_non_commerical:
+            return (
+                False,
+                f"Models with license {self.license_type!s} cannot be published",
+            )
+
         if not self.has_static_banner:
             return False, "model has no static banner asset"
 
         if not self.code_gen_config.supports_at_least_1_runtime:
             return False, "model does not support at least one export path"
+
+        must_have_assets = not self.restrict_model_sharing
+        if self.llm_details:
+            must_have_assets = must_have_assets and self.llm_details.call_to_action in {
+                LLM_CALL_TO_ACTION.DOWNLOAD,
+                LLM_CALL_TO_ACTION.DOWNLOAD_AND_VIEW_README,
+            }
+
+        if must_have_assets and not os.path.exists(
+            QAIHM_MODELS_ROOT / self.id / "release-assets.yaml"
+        ):
+            return False, "no release assets available"
 
         return True, ""
 

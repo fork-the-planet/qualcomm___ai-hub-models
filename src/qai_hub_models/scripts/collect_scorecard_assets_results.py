@@ -20,6 +20,7 @@ from qai_hub_models.scorecard.envvars import (
 )
 from qai_hub_models.scorecard.results.code_gen import (
     remove_asset_failures,
+    update_model_publish_status,
 )
 from qai_hub_models.scorecard.results.yaml import ScorecardAssetYaml
 from qai_hub_models.scorecard.static.list_models import (
@@ -83,6 +84,12 @@ def main() -> None:
                 QAIHMModelReleaseAssets().to_model_yaml(
                     model_id
                 )  # deletes existing file
+
+            # Update model status & reason, if applicable
+            if update_model_publish_status(model_info):
+                info_yaml_path, _ = model_info.to_model_yaml(write_code_gen=False)
+                print(f"Updated publish status at {info_yaml_path}")
+
         except Exception as e:
             raise ValueError(
                 f"Failed to collect accuracy results for {model_id}"
