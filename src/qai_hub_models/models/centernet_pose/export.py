@@ -370,7 +370,7 @@ def export_model(
             quantized_model = hub.get_model(quantized_model_id)
             assert quantized_model is not None
         else:
-            onnx_compile_job = compile_model(
+            onnx_compile_result = compile_model(
                 model,
                 model_name,
                 device,
@@ -378,9 +378,9 @@ def export_model(
                 precision,
                 input_spec=input_spec,
             )
-            onnx_model = onnx_compile_job.get_target_model()
+            onnx_model = onnx_compile_result.get_target_model()
             assert onnx_model is not None, (
-                f"ONNX compile job failed: {onnx_compile_job}"
+                f"ONNX compile job failed: {onnx_compile_result}"
             )
             quantize_job = quantize_model(
                 precision,
@@ -397,7 +397,7 @@ def export_model(
             assert quantized_model is not None, f"Quantize job failed: {quantize_job}"
 
     # 3. Compiles the model to an asset that can be run on device
-    compile_job = compile_model(
+    compile_result = compile_model(
         model,
         model_name,
         device,
@@ -408,12 +408,12 @@ def export_model(
         extra_options=compile_options,
     )
 
-    link_job: hub.client.LinkJob | None = None
+    link_result: hub.client.LinkJob | None = None
     target_model: hub.Model | None
     if target_runtime.uses_hub_link:
-        compiled_model = compile_job.get_target_model()
-        assert compiled_model is not None, f"Compile job failed: {compile_job}"
-        link_job = link_model(
+        compiled_model = compile_result.get_target_model()
+        assert compiled_model is not None, f"Compile job failed: {compile_result}"
+        link_result = link_model(
             compiled_model,
             device,
             model_name,
@@ -421,17 +421,17 @@ def export_model(
             target_runtime,
         )
         # Extract target models from link jobs for profile/inference
-        target_model = link_job.get_target_model()
-        assert target_model is not None, f"Link job failed: {link_job}"
+        target_model = link_result.get_target_model()
+        assert target_model is not None, f"Link job failed: {link_result}"
     else:
         # For JIT runtimes, extract models from compile jobs
-        target_model = compile_job.get_target_model()
-        assert target_model is not None, f"Compile job failed: {compile_job}"
+        target_model = compile_result.get_target_model()
+        assert target_model is not None, f"Compile job failed: {compile_result}"
 
     # 4. Profiles the model performance on a real device
-    profile_job: hub.client.ProfileJob | None = None
+    profile_result: hub.client.ProfileJob | None = None
     if not skip_profiling:
-        profile_job = profile_model(
+        profile_result = profile_model(
             model_name,
             device,
             model.get_hub_profile_options(target_runtime, profile_options),
@@ -439,9 +439,9 @@ def export_model(
         )
 
     # 5. Inferences the model on sample inputs
-    inference_job: hub.client.InferenceJob | None = None
+    inference_result: hub.client.InferenceJob | None = None
     if not skip_inferencing:
-        inference_job = inference_model(
+        inference_result = inference_model(
             model.sample_inputs(
                 input_spec=input_spec,
                 use_channel_last_format=target_runtime.channel_last_native_execution,
@@ -456,14 +456,14 @@ def export_model(
     tool_versions: ToolVersions | None = None
     tool_versions_are_from_device_job = False
     if not skip_summary or not skip_downloading:
-        if profile_job is not None and profile_job.wait():
-            tool_versions = ToolVersions.from_job(profile_job)
+        if profile_result is not None and profile_result.wait():
+            tool_versions = ToolVersions.from_job(profile_result)
             tool_versions_are_from_device_job = True
-        elif inference_job is not None and inference_job.wait():
-            tool_versions = ToolVersions.from_job(inference_job)
+        elif inference_result is not None and inference_result.wait():
+            tool_versions = ToolVersions.from_job(inference_result)
             tool_versions_are_from_device_job = True
-        elif compile_job and compile_job.wait():
-            tool_versions = ToolVersions.from_job(compile_job)
+        elif compile_result and compile_result.wait():
+            tool_versions = ToolVersions.from_job(compile_result)
 
     # 7. Downloads the model asset to the local directory
     downloaded_model_path: Path | None = None
@@ -484,40 +484,42 @@ def export_model(
         )
 
     # 8. Summarizes the results from profiling and inference
-    if not skip_summary and profile_job is not None:
-        assert profile_job.wait().success, "Job failed: " + profile_job.url
-        profile_data: dict[str, Any] = profile_job.download_profile()
-        print_profile_metrics_from_job(profile_job, profile_data)
+    if not skip_summary and profile_result is not None:
+        assert profile_result.wait().success, "Job failed: " + profile_result.url
+        profile_data: dict[str, Any] = profile_result.download_profile()
+        print_profile_metrics_from_job(profile_result, profile_data)
 
-    if not skip_summary and inference_job is not None:
+    if not skip_summary and inference_result is not None:
         sample_inputs = model.sample_inputs(input_spec, use_channel_last_format=False)
         torch_out = torch_inference(
             model,
             sample_inputs,
             return_channel_last_output=target_runtime.channel_last_native_execution,
         )
-        assert inference_job.wait().success, "Job failed: " + inference_job.url
-        inference_result = inference_job.download_output_data()
-        assert inference_result is not None
+        assert inference_result.wait().success, "Job failed: " + inference_result.url
+        ij_output = inference_result.download_output_data()
+        assert ij_output is not None
         print_inference_metrics(
-            inference_job, inference_result, torch_out, model.get_output_names()
+            inference_result, ij_output, torch_out, model.get_output_names()
         )
 
     if not skip_summary:
         print_tool_versions(tool_versions, tool_versions_are_from_device_job)
         print_on_target_demo_cmd(
-            link_job if link_job else compile_job, Path(__file__).parent, device
+            link_result if link_result else compile_result,
+            Path(__file__).parent,
+            device,
         )
 
     if downloaded_model_path:
         print(f"{model_name} was saved to {downloaded_model_path}\n")
 
     return ExportResult(
-        compile_job=compile_job,
-        link_job=link_job,
-        inference_job=inference_job,
-        profile_job=profile_job,
         quantize_job=quantize_job,
+        compile_job=compile_result,
+        link_job=link_result,
+        inference_job=inference_result,
+        profile_job=profile_result,
         download_path=downloaded_model_path,
         tool_versions=tool_versions,
     )

@@ -24,7 +24,10 @@ from qai_hub_models.utils.args import (
 )
 from qai_hub_models.utils.base_model import TargetRuntime
 from qai_hub_models.utils.compare import torch_inference
-from qai_hub_models.utils.export_result import CollectionExportResult, ExportResult
+from qai_hub_models.utils.export_result import (
+    ExportResult,
+    LegacyCollectionExportResult,
+)
 from qai_hub_models.utils.export_without_hub_access import export_without_hub_access
 from qai_hub_models.utils.input_spec import to_hub_input_specs
 from qai_hub_models.utils.model_cache import CacheMode
@@ -84,7 +87,7 @@ def export_model(
     profile_options: str = "",
     model_cache_mode: CacheMode = CacheMode.ENABLE,
     **additional_model_kwargs: Any,
-) -> CollectionExportResult:
+) -> LegacyCollectionExportResult:
     """
     This function accomplishes 6 main tasks:
 
@@ -141,7 +144,7 @@ def export_model(
 
     Returns
     -------
-    result : CollectionExportResult
+    result : LegacyCollectionExportResult
         A Mapping from component_name to a 3-tuple of:
         * A LinkJob object containing metadata about the link job submitted to hub.
         * A ProfileJob containing metadata about the profile job (None if profiling skipped).
@@ -179,7 +182,7 @@ def export_model(
             compile_options + " " + profile_options + " " + link_options,
             component_arg,
         )
-        return CollectionExportResult(
+        return LegacyCollectionExportResult(
             components={
                 component_name: ExportResult() for component_name in components
             },
@@ -366,7 +369,7 @@ def export_model(
         "These models can be deployed on-device using the Genie SDK. For a full tutorial, please follow the instructions here: https://github.com/quic/ai-hub-apps/tree/main/tutorials/llm_on_genie."
     )
 
-    return CollectionExportResult(
+    return LegacyCollectionExportResult(
         components={
             component_name: ExportResult(
                 compile_job=compile_jobs[sub_component_name],

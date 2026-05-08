@@ -19,7 +19,11 @@ from ruamel.yaml import YAML
 from qai_hub_models.configs.info_yaml import QAIHMModelInfo
 from qai_hub_models.utils.asset_loaders import qaihm_temp_dir
 from qai_hub_models.utils.base_model import TargetRuntime
-from qai_hub_models.utils.export_result import CollectionExportResult, ExportResult
+from qai_hub_models.utils.export_result import (
+    CollectionExportResult,
+    ExportResult,
+    LegacyCollectionExportResult,
+)
 from qai_hub_models.utils.measurement import (
     get_checkpoint_file_size,
     get_tflite_unique_parameters,
@@ -161,13 +165,20 @@ def main() -> None:
                         details[str(precision)]["model"] = (
                             get_model_size_and_parameters(results.compile_job)
                         )
-                    elif isinstance(results, CollectionExportResult):
-                        for component_name in results.components:
+                    elif isinstance(results, LegacyCollectionExportResult):
+                        for component_name, er in results.components.items():
                             details[str(precision)][component_name] = (
-                                get_model_size_and_parameters(
-                                    results.components[component_name].compile_job
-                                )
+                                get_model_size_and_parameters(er.compile_job)
                             )
+                    elif isinstance(results, CollectionExportResult):
+                        if results.compile_jobs:
+                            for (
+                                component_name,
+                                compile_job,
+                            ) in results.compile_jobs.components.items():
+                                details[str(precision)][component_name] = (
+                                    get_model_size_and_parameters(compile_job)
+                                )
                     else:
                         raise NotImplementedError(  # noqa: TRY301
                             f"Unknown export script result type: {type(results)}"

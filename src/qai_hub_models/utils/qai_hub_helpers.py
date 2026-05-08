@@ -7,14 +7,13 @@ from __future__ import annotations
 
 import os
 import re
-import shlex
 import shutil
 import time
 import zipfile
-from collections.abc import Callable, Mapping
+from collections.abc import Callable
 from os import PathLike
 from pathlib import Path
-from typing import Any, NamedTuple, overload
+from typing import Any, NamedTuple, TypeVar, overload
 
 import numpy as np
 import onnx
@@ -24,6 +23,11 @@ from qai_hub.client import DatasetEntries, Device
 
 from qai_hub_models.models.common import Precision, TargetRuntime
 from qai_hub_models.utils.asset_loaders import qaihm_temp_dir
+from qai_hub_models.utils.export_result import (
+    ComponentGroup,
+    MultiGraphComponentGroup,
+    MultiGraphGroup,
+)
 from qai_hub_models.utils.onnx.helpers import (
     safe_torch_onnx_export,
 )
@@ -329,70 +333,6 @@ def ensure_hexagon_version(
     return None
 
 
-def extract_job_options(job: hub.Job) -> dict[str, str | bool]:
-    """
-    Get a dictionary of all options passed for this job.
-
-    Options that are not passed explicitly in the workbench job options (that Hub will treat as defaults) are not included in the dictionary.
-
-    Parameters
-    ----------
-    job
-        The job from which to extract options.
-
-    Returns
-    -------
-    options : dict[str, str | bool]
-        Dictionary of all options passed for this job.
-
-    Examples
-    --------
-    If a hub job is submitted with options "--qairt_version 2.33 --dequantize_outputs --dict_input='w=x;y=z'"
-    Then the returned dict would be:
-
-    .. code-block:: python
-
-        {
-            "qairt_version": "2.33",
-            "dequantize_outputs": True,
-            "dict_input": "w=x;y=z"
-        }
-    """
-    out = {}
-
-    model_options = shlex.split(job.options.strip())
-    for i in range(len(model_options)):
-        option = model_options[i]
-        if option.startswith("--"):
-            value: str | bool
-            if "=" in option:
-                # Handle args of form "--blah=blah"
-                #
-                # If the option starts with '--' and has an =, then it must be in the format --x=y.
-                # If the option was in the format --x y=x, then it would be parsed as two different options by shlex.
-                # So we can safely split this option on the first '=' in the string to get the option key and value.
-                key, value = option.split("=", maxsplit=1)
-                if (value.startswith("'") and value.endswith("'")) or (
-                    value.startswith('"') and value.endswith('"')
-                ):
-                    value = value[1 : len(value) - 1]
-            elif i == len(model_options) - 1 or model_options[i + 1].startswith("--"):
-                # Either:
-                #   - this is the last arg and has no value
-                #   - this --arg is immediately followed by another --arg
-                # Therefore it must be a boolean. All Hub booleans are true if explicitly passed as an option.
-                key = option
-                value = True
-            else:
-                # This is a standard --key value pair.
-                key = option
-                value = model_options[i + 1]
-            # Strip "--" from arg name.
-            out[key[2:]] = value
-
-    return out
-
-
 def download_model_in_memory(model: hub.Model) -> Any:
     """
     Download the model to a file and load it into memory.
@@ -490,67 +430,87 @@ def get_device_and_chipset_name(device: hub.Device) -> tuple[str | None, str | N
     return (device.name or None, chipset)
 
 
+JobT = TypeVar("JobT", hub.CompileJob, hub.QuantizeJob, hub.LinkJob)
+
+
 @overload
 def assert_success_and_get_target_models(
-    jobs: hub.CompileJob | hub.QuantizeJob | hub.LinkJob,
+    jobs: JobT,
 ) -> hub.Model: ...
 
 
 @overload
 def assert_success_and_get_target_models(
-    jobs: Mapping[str, hub.CompileJob | hub.QuantizeJob | hub.LinkJob],
-) -> dict[str, hub.Model]: ...
+    jobs: MultiGraphGroup[JobT],
+) -> MultiGraphGroup[hub.Model]: ...
 
 
 @overload
 def assert_success_and_get_target_models(
-    jobs: Mapping[str, Mapping[str, hub.CompileJob | hub.QuantizeJob | hub.LinkJob]],
-) -> dict[str, dict[str, hub.Model]]: ...
+    jobs: ComponentGroup[JobT],
+) -> ComponentGroup[hub.Model]: ...
 
 
+@overload
 def assert_success_and_get_target_models(
-    jobs: hub.CompileJob
-    | hub.QuantizeJob
-    | hub.LinkJob
-    | Mapping[str, hub.CompileJob | hub.QuantizeJob | hub.LinkJob]
-    | Mapping[str, Mapping[str, hub.CompileJob | hub.QuantizeJob | hub.LinkJob]],
-) -> hub.Model | dict[str, hub.Model] | dict[str, dict[str, hub.Model]]:
+    jobs: MultiGraphComponentGroup[JobT],
+) -> MultiGraphComponentGroup[hub.Model]: ...
+
+
+def assert_success_and_get_target_models(  # type: ignore[misc]
+    jobs: JobT
+    | MultiGraphGroup[JobT]
+    | ComponentGroup[JobT]
+    | MultiGraphComponentGroup[JobT],
+) -> (
+    hub.Model
+    | MultiGraphGroup[hub.Model]
+    | ComponentGroup[hub.Model]
+    | MultiGraphComponentGroup[hub.Model]
+):
     """
     Assert all jobs succeeded and extract their target models.
 
     Parameters
     ----------
     jobs
-        A dict mapping names to compile, quantize, or link jobs.
+        A single job, a ComponentGroup of jobs, a MultiGraphGroup,
+        or a MultiGraphComponentGroup.
 
     Returns
     -------
-    target_models : hub.Model | dict[str, hub.Model] | dict[str, dict[str, hub.Model]]
-        A dict mapping names to target models.
+    hub.Model | MultiGraphGroup[hub.Model] | ComponentGroup[hub.Model] | MultiGraphComponentGroup[hub.Model]
+        The target model(s) extracted from the job(s), preserving the input structure.
 
     Raises
     ------
     AssertionError
         If any job failed and no target model is available.
     """
-    if isinstance(jobs, dict):
-        target_models: dict[str, hub.Model | dict[str, hub.Model]] = {}
-        for name, job_or_gn_map in jobs.items():
-            if isinstance(job_or_gn_map, dict):
-                target_models[name] = {}
-                for gn, job in job_or_gn_map.items():
-                    target_model = job.get_target_model()
-                    assert target_model is not None, f"Job failed for {name}: {job.url}"
-                    target_models[name][gn] = target_model  # type: ignore[index]
-            else:
-                target_model = job_or_gn_map.get_target_model()
-                assert target_model is not None, (
-                    f"Job failed for {name}: {job_or_gn_map.url}"
-                )
-                target_models[name] = target_model
-        return target_models  # type: ignore[return-value]
+    if isinstance(jobs, MultiGraphComponentGroup):
+        result_components: dict[tuple[str, str | None], hub.Model] = {}
+        for (comp, gn), job in jobs.component_graph_names.items():
+            target_model = job.get_target_model()
+            assert target_model is not None, f"Job failed for {comp}/{gn}: {job.url}"
+            result_components[(comp, gn)] = target_model
+        return MultiGraphComponentGroup(component_graph_names=result_components)
 
-    assert not isinstance(jobs, Mapping)
+    if isinstance(jobs, ComponentGroup):
+        target_models_dict: dict[str, hub.Model] = {}
+        for name, job in jobs.components.items():
+            target_model = job.get_target_model()
+            assert target_model is not None, f"Job failed for {name}: {job.url}"
+            target_models_dict[name] = target_model
+        return ComponentGroup(components=target_models_dict)
+
+    if isinstance(jobs, MultiGraphGroup):
+        graph_models: dict[str, hub.Model] = {}
+        for name, job in jobs.graph_names.items():
+            target_model = job.get_target_model()
+            assert target_model is not None, f"Job failed for {name}: {job.url}"
+            graph_models[name] = target_model
+        return MultiGraphGroup(graph_names=graph_models)
+
     target_model = jobs.get_target_model()
     assert target_model is not None, f"Job failed: {jobs.url}"
     return target_model

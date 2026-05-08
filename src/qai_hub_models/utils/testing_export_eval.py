@@ -77,7 +77,16 @@ from qai_hub_models.utils.evaluate import (
     evaluate_on_dataset,
     get_torch_val_dataloader,
 )
-from qai_hub_models.utils.export_result import CollectionExportResult, ExportResult
+from qai_hub_models.utils.export_result import (
+    CollectionExportResult,
+    ComponentGroup,
+    ExportResult,
+    LegacyCollectionExportResult,
+    MultiGraphCollectionExportResult,
+    MultiGraphComponentGroup,
+    MultiGraphExportResult,
+    MultiGraphGroup,
+)
 from qai_hub_models.utils.hub_clients import (
     deployment_is_prod,
     get_default_hub_deployment,
@@ -101,11 +110,18 @@ from qai_hub_models.utils.testing_async_utils import (
     write_accuracy,
 )
 
-ExportFunc = Callable[..., ExportResult | CollectionExportResult]
+ExportFunc = Callable[
+    ...,
+    ExportResult
+    | CollectionExportResult
+    | MultiGraphExportResult
+    | MultiGraphCollectionExportResult
+    | LegacyCollectionExportResult,
+]
 JobFunc = Callable[..., hub.Job | dict[str, hub.Job]]
 
 
-def _get_component_gn(
+def _get_components_and_graph_names(
     model: Any,
 ) -> tuple[list[str] | None, list[str] | None, dict[str, list[str]] | None]:
     components: list[str] | None = None
@@ -124,28 +140,6 @@ def _get_component_gn(
         graph_names = list(model.get_input_spec().keys())
 
     return components, graph_names, component_graph_names
-
-
-def _parse_export_result(
-    result: CollectionExportResult | ExportResult,
-) -> dict[str | None, ExportResult]:
-    """
-    Converts the result of an export script (export_model) to a consistent type.
-
-    For models WITHOUT components, returns:
-        { None: ExportResult }
-
-    For models WITH components, returns:
-        {
-            'component_1_name: ExportResult,
-            ...
-        }
-    """
-    if isinstance(result, ExportResult):
-        # Map: <Component Name: Component>
-        # Use "None" since there are no components.
-        return {None: result}
-    return cast(dict[str | None, ExportResult], result.components)
 
 
 def _invalid_job_submission(*args: Any, **kwargs: Any) -> None:
@@ -448,8 +442,8 @@ def pre_quantize_compile_via_export(
     compile_model: Callable[
         ...,
         hub.CompileJob
-        | dict[str, hub.CompileJob]
-        | dict[str, dict[str, hub.CompileJob]],
+        | ComponentGroup[hub.CompileJob]
+        | MultiGraphComponentGroup[hub.CompileJob],
     ],
     model_id: str,
     model: CollectionModel | BaseModel,
@@ -474,7 +468,9 @@ def pre_quantize_compile_via_export(
     model
         QAIHM instance of the model.
     """
-    component_names, graph_names, component_graph_names = _get_component_gn(model)
+    component_names, graph_names, component_graph_names = (
+        _get_components_and_graph_names(model)
+    )
     assert component_graph_names is None, (
         "Auto-quantization of multi-graph models is not supported"
     )
@@ -503,7 +499,9 @@ def pre_quantize_compile_via_export(
 
 
 def quantize_via_export(
-    quantize_model: Callable[..., hub.QuantizeJob | dict[str, hub.QuantizeJob] | None],
+    quantize_model: Callable[
+        ..., hub.QuantizeJob | ComponentGroup[hub.QuantizeJob] | None
+    ],
     model_id: str,
     model: CollectionModel | BaseModel,
     precision: Precision,
@@ -530,7 +528,9 @@ def quantize_via_export(
     precision
         Model precision.
     """
-    component_names, graph_names, component_graph_names = _get_component_gn(model)
+    component_names, graph_names, component_graph_names = (
+        _get_components_and_graph_names(model)
+    )
     assert component_graph_names is None, (
         "Auto-quantization of multi-graph models is not supported"
     )
@@ -578,8 +578,8 @@ def compile_via_export(
     compile_model: Callable[
         ...,
         hub.CompileJob
-        | dict[str, hub.CompileJob]
-        | dict[str, dict[str, hub.CompileJob]],
+        | ComponentGroup[hub.CompileJob]
+        | MultiGraphComponentGroup[hub.CompileJob],
     ],
     model_id: str,
     model: CollectionModel | BaseModel,
@@ -620,7 +620,9 @@ def compile_via_export(
     is_aimet
         Whether the model uses local aimet encodings during compilation.
     """
-    component_names, graph_names, component_graph_names = _get_component_gn(model)
+    component_names, graph_names, component_graph_names = (
+        _get_components_and_graph_names(model)
+    )
     test_params = ScExportTestParams(
         model_id,
         scorecard_path,
@@ -686,7 +688,7 @@ def compile_via_export(
 
 
 def link_via_export(
-    link_model: Callable[..., hub.LinkJob | dict[str, hub.LinkJob]],
+    link_model: Callable[..., hub.LinkJob | ComponentGroup[hub.LinkJob]],
     model_id: str,
     model: CollectionModel | BaseModel,
     precision: Precision,
@@ -723,7 +725,9 @@ def link_via_export(
     """
     assert scorecard_path.runtime.uses_hub_link
 
-    component_names, graph_names, component_graph_names = _get_component_gn(model)
+    component_names, graph_names, component_graph_names = (
+        _get_components_and_graph_names(model)
+    )
     test_params = ScExportTestParams(
         model_id,
         path=scorecard_path,
@@ -813,7 +817,8 @@ def run_llm_compile(
         component_names=component_names,
     )
 
-    export_result = _parse_export_result(
+    result = cast(
+        LegacyCollectionExportResult,
         export_model(
             device=device.execution_device,
             precision=precision,
@@ -826,17 +831,19 @@ def run_llm_compile(
             ),
             target_runtime=scorecard_path.runtime,
             **extra_model_arguments or {},
-        )
+        ),
     )
 
     # Verify success or cache job IDs to a file.
     cache = CompileScorecardJobYaml.from_test_artifacts()
     cache.update_from_export_output(
-        {
-            x: y.compile_job
-            for x, y in export_result.items()
-            if x is not None and y.compile_job is not None
-        },
+        ComponentGroup(
+            components={
+                name: er.compile_job
+                for name, er in result.components.items()
+                if er.compile_job is not None
+            }
+        ),
         test_params,
     )
     cache.to_file()
@@ -845,7 +852,13 @@ def run_llm_compile(
 def fetch_cached_jobs_if_compile_jobs_are_identical(
     job_type_to_fetch_from_cache: (Literal[hub.JobType.PROFILE, hub.JobType.INFERENCE]),
     params: ScExportTestParams,
-) -> JobTypeVar | dict[str, JobTypeVar] | dict[str, dict[str, JobTypeVar]] | None:
+) -> (
+    JobTypeVar
+    | MultiGraphGroup[JobTypeVar]
+    | ComponentGroup[JobTypeVar]
+    | MultiGraphComponentGroup[JobTypeVar]
+    | None
+):
     """
     Checks if the compile jobs are the same, the QAIRT version matches, and the override flag is not set.
     If all conditions are met, returns the cached profile or inference job and saves the job to the YAML cache.
@@ -860,7 +873,7 @@ def fetch_cached_jobs_if_compile_jobs_are_identical(
 
     Returns
     -------
-    cached_result : JobTypeVar | dict[str, JobTypeVar] | dict[str, dict[str, JobTypeVar]] | None
+    cached_result : JobTypeVar | MultiGraphGroup[JobTypeVar] | ComponentGroup[JobTypeVar] | MultiGraphComponentGroup[JobTypeVar] | None
         The cached Jobs, or None if no cached job is found.
     """
     assert isinstance(params.path, ScorecardProfilePath)
@@ -917,8 +930,9 @@ def fetch_compile_or_link_jobs(
     test_params: ScExportTestParams,
 ) -> (
     CompileOrLinkT
-    | dict[str, CompileOrLinkT]
-    | dict[str, dict[str, CompileOrLinkT]]
+    | MultiGraphGroup[CompileOrLinkT]
+    | ComponentGroup[CompileOrLinkT]
+    | MultiGraphComponentGroup[CompileOrLinkT]
     | None
 ):
     """Fetch cached compile or link jobs depending on runtime type."""
@@ -932,8 +946,8 @@ def profile_via_export(
     profile_model: Callable[
         ...,
         hub.ProfileJob
-        | dict[str, hub.ProfileJob]
-        | dict[str, dict[str, hub.ProfileJob]],
+        | ComponentGroup[hub.ProfileJob]
+        | MultiGraphComponentGroup[hub.ProfileJob],
     ],
     model_id: str,
     model: CollectionModel | BaseModel,
@@ -971,7 +985,9 @@ def profile_via_export(
     device
         Scorecard device.
     """
-    component_names, graph_names, component_graph_names = _get_component_gn(model)
+    component_names, graph_names, component_graph_names = (
+        _get_components_and_graph_names(model)
+    )
     test_params = ScExportTestParams(
         model_id,
         path=scorecard_path,
@@ -1014,8 +1030,8 @@ def inference_via_export(
     inference_model: Callable[
         ...,
         hub.InferenceJob
-        | dict[str, hub.InferenceJob]
-        | dict[str, dict[str, hub.InferenceJob]],
+        | ComponentGroup[hub.InferenceJob]
+        | MultiGraphComponentGroup[hub.InferenceJob],
     ],
     model_id: str,
     model: CollectionModel | BaseModel,
@@ -1053,7 +1069,9 @@ def inference_via_export(
     device
         Scorecard device.
     """
-    component_names, graph_names, component_graph_names = _get_component_gn(model)
+    component_names, graph_names, component_graph_names = (
+        _get_components_and_graph_names(model)
+    )
     test_params = ScExportTestParams(
         model_id,
         path=scorecard_path,
@@ -1322,7 +1340,9 @@ def on_device_inference_for_accuracy_validation(
     device
         Scorecard device.
     """
-    component_names, graph_names, component_graph_names = _get_component_gn(model)
+    component_names, graph_names, component_graph_names = (
+        _get_components_and_graph_names(model)
+    )
     assert graph_names is None and component_graph_names is None, (
         "Graph names are not supported for on-device inference"
     )
@@ -1370,7 +1390,9 @@ def on_device_inference_for_accuracy_validation(
             jobs_dict[component_name] = ijob
 
     cache = InferenceScorecardJobYaml.from_test_artifacts()
-    cache.update_from_export_output(job if job else jobs_dict, test_params)
+    cache.update_from_export_output(
+        job if job else ComponentGroup(components=jobs_dict), test_params
+    )
     cache.to_file()
 
 
@@ -1578,7 +1600,9 @@ def accuracy_on_sample_inputs_via_export(
         Name of all model components (if applicable), or None of there are no components.
         Default is None.
     """
-    component_names, graph_names, component_graph_names = _get_component_gn(model)
+    component_names, graph_names, component_graph_names = (
+        _get_components_and_graph_names(model)
+    )
     assert graph_names is None and component_graph_names is None, (
         "Graph names are not supported for on-device inference"
     )
@@ -1717,7 +1741,9 @@ def accuracy_on_dataset_via_evaluate_and_export(
         Scorecard device.
 
     """
-    component_names, graph_names, component_graph_names = _get_component_gn(model)
+    component_names, graph_names, component_graph_names = (
+        _get_components_and_graph_names(model)
+    )
     assert graph_names is None and component_graph_names is None, (
         "Graph names are not supported for on-device inference"
     )
@@ -1959,7 +1985,9 @@ def sim_accuracy_on_dataset(
         Model precision.
 
     """
-    component_names, graph_names, component_graph_names = _get_component_gn(model)
+    component_names, graph_names, component_graph_names = (
+        _get_components_and_graph_names(model)
+    )
     assert (
         component_names is None
         and graph_names is None

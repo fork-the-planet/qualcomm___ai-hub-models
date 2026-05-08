@@ -34,9 +34,9 @@ from qai_hub_models.utils.args import (
     get_model_kwargs,
 )
 from qai_hub_models.utils.asset_loaders import ASSET_CONFIG
-from qai_hub_models.utils.base_model import BaseModel, PretrainedCollectionModel
+from qai_hub_models.utils.base_model import PretrainedCollectionModel
 from qai_hub_models.utils.compare import torch_inference
-from qai_hub_models.utils.export_result import CollectionExportResult, ExportResult
+from qai_hub_models.utils.export_result import CollectionExportResult, ComponentGroup
 from qai_hub_models.utils.export_without_hub_access import export_without_hub_access
 from qai_hub_models.utils.input_spec import InputSpec, to_hub_input_specs
 from qai_hub_models.utils.onnx.helpers import download_and_unzip_workbench_onnx_model
@@ -61,7 +61,7 @@ def compile_model(
     input_specs: dict[str, InputSpec] | None = None,
     components: list[str] | None = None,
     extra_options: str = "",
-) -> dict[str, hub.client.CompileJob]:
+) -> ComponentGroup[hub.client.CompileJob]:
     compile_jobs: dict[str, hub.client.CompileJob] = {}
     for component_name in components or Model.component_class_names:
         component = model.components[component_name]
@@ -89,23 +89,23 @@ def compile_model(
         compile_jobs[component_name] = cast(
             hub.client.CompileJob, submitted_compile_job
         )
-    return compile_jobs
+    return ComponentGroup(components=compile_jobs)
 
 
 def link_model(
-    compiled_models: dict[str, hub.Model],
+    compiled_models: ComponentGroup[hub.Model],
     device: hub.Device,
     model_name: str,
     model: PretrainedCollectionModel,
     target_runtime: TargetRuntime,
     extra_options: str = "",
-) -> dict[str, hub.client.LinkJob]:
+) -> ComponentGroup[hub.client.LinkJob]:
     """Link compiled DLCs to context binary for AOT."""
     assert target_runtime.is_aot_compiled, (
         f"link_model() requires an AOT runtime, got {target_runtime}"
     )
     link_jobs: dict[str, hub.client.LinkJob] = {}
-    for component_name, compiled_model in compiled_models.items():
+    for component_name, compiled_model in compiled_models.components.items():
         component = model.components[component_name]
 
         link_options = component.get_hub_link_options(target_runtime, extra_options)
@@ -116,21 +116,21 @@ def link_model(
             name=f"{model_name}_{component_name}",
             options=link_options,
         )
-    return link_jobs
+    return ComponentGroup(components=link_jobs)
 
 
 def profile_model(
     model_name: str,
     device: hub.Device,
     options: dict[str, str],
-    target_models: dict[str, hub.Model],
+    target_models: ComponentGroup[hub.Model],
     components: list[str] | None = None,
-) -> dict[str, hub.client.ProfileJob]:
+) -> ComponentGroup[hub.client.ProfileJob]:
     profile_jobs: dict[str, hub.client.ProfileJob] = {}
     for component_name in components or Model.component_class_names:
         print(f"Profiling model {component_name} on a hosted device.")
         submitted_profile_job = hub.submit_profile_job(
-            model=target_models[component_name],
+            model=target_models.components[component_name],
             device=device,
             name=f"{model_name}_{component_name}",
             options=options.get(component_name, ""),
@@ -138,7 +138,7 @@ def profile_model(
         profile_jobs[component_name] = cast(
             hub.client.ProfileJob, submitted_profile_job
         )
-    return profile_jobs
+    return ComponentGroup(components=profile_jobs)
 
 
 def inference_model(
@@ -146,16 +146,16 @@ def inference_model(
     model_name: str,
     device: hub.Device,
     options: dict[str, str],
-    target_models: dict[str, hub.Model],
+    target_models: ComponentGroup[hub.Model],
     components: list[str] | None = None,
-) -> dict[str, hub.client.InferenceJob]:
+) -> ComponentGroup[hub.client.InferenceJob]:
     inference_jobs: dict[str, hub.client.InferenceJob] = {}
     for component_name in components or Model.component_class_names:
         print(
             f"Running inference for {component_name} on a hosted device with example inputs."
         )
         submitted_inference_job = hub.submit_inference_job(
-            model=target_models[component_name],
+            model=target_models.components[component_name],
             inputs=inputs[component_name],
             device=device,
             name=f"{model_name}_{component_name}",
@@ -164,7 +164,7 @@ def inference_model(
         inference_jobs[component_name] = cast(
             hub.client.InferenceJob, submitted_inference_job
         )
-    return inference_jobs
+    return ComponentGroup(components=inference_jobs)
 
 
 def download_model(
@@ -173,7 +173,7 @@ def download_model(
     runtime: TargetRuntime,
     precision: Precision,
     tool_versions: ToolVersions,
-    target_models: dict[str, hub.Model],
+    target_models: ComponentGroup[hub.Model],
     zip_assets: bool,
     hub_device: hub.Device | None = None,
 ) -> Path:
@@ -186,7 +186,7 @@ def download_model(
 
         # Download models and capture filenames, then generate metadata
         model_file_metadata = {}
-        for component_name, target_model in target_models.items():
+        for component_name, target_model in target_models.components.items():
             if target_model.model_type == hub.SourceModelType.ONNX:
                 onnx_result = download_and_unzip_workbench_onnx_model(
                     target_model, dst_path, component_name
@@ -204,7 +204,6 @@ def download_model(
             )
             # Merge semantic metadata from get_input_spec()
             component = model.components[component_name]
-            assert isinstance(component, BaseModel)
             merge_input_metadata(
                 model_file_metadata[model_file_name], component.get_input_spec()
             )
@@ -315,7 +314,6 @@ def export_model(
     Returns
     -------
     CollectionExportResult
-        A Mapping from component_name to:
             * A CompileJob object containing metadata about the compile job submitted to hub.
             * An InferenceJob containing metadata about the inference job (None if inferencing skipped).
             * A ProfileJob containing metadata about the profile job (None if profiling skipped).
@@ -349,12 +347,7 @@ def export_model(
             component_arg,
             qaihm_version_tag=fetch_static_assets,
         )
-        return CollectionExportResult(
-            components={
-                component_name: ExportResult() for component_name in components
-            },
-            download_path=static_model_path,
-        )
+        return CollectionExportResult(download_path=static_model_path)
 
     hub_device = hub.get_devices(
         name=device.name, attributes=device.attributes, os=device.os
@@ -376,7 +369,7 @@ def export_model(
     }
 
     # 2. Compiles the model to an asset that can be run on device
-    compile_jobs: dict[str, hub.client.CompileJob] = compile_model(
+    compile_result = compile_model(
         model,
         model_name,
         device,
@@ -387,11 +380,11 @@ def export_model(
         extra_options=compile_options,
     )
 
-    link_jobs: dict[str, hub.client.LinkJob] | None = None
-    target_models: dict[str, hub.Model]
+    link_result: ComponentGroup[hub.client.LinkJob] | None = None
+    target_models: ComponentGroup[hub.Model]
     if target_runtime.uses_hub_link:
-        compiled_models = assert_success_and_get_target_models(compile_jobs)
-        link_jobs = link_model(
+        compiled_models = assert_success_and_get_target_models(compile_result)
+        link_result = link_model(
             compiled_models,
             device,
             model_name,
@@ -399,13 +392,13 @@ def export_model(
             target_runtime,
         )
     target_models = assert_success_and_get_target_models(
-        link_jobs if link_jobs else compile_jobs
+        link_result if link_result else compile_result
     )
 
     # 3. Profiles the model performance on a real device
-    profile_jobs: dict[str, hub.client.ProfileJob] = {}
+    profile_result: ComponentGroup[hub.client.ProfileJob] | None = None
     if not skip_profiling:
-        profile_jobs = profile_model(
+        profile_result = profile_model(
             model_name,
             device,
             model.get_hub_profile_options(target_runtime, profile_options),
@@ -414,9 +407,9 @@ def export_model(
         )
 
     # 4. Inferences the model on sample inputs
-    inference_jobs: dict[str, hub.client.InferenceJob] = {}
+    inference_result: ComponentGroup[hub.client.InferenceJob] | None = None
     if not skip_inferencing:
-        inference_jobs = inference_model(
+        inference_result = inference_model(
             model.sample_inputs(
                 input_specs=input_specs,
                 use_channel_last_format=target_runtime.channel_last_native_execution,
@@ -432,9 +425,17 @@ def export_model(
     tool_versions: ToolVersions | None = None
     tool_versions_are_from_device_job = False
     if not skip_summary or not skip_downloading:
-        profile_job = next(iter(profile_jobs.values())) if profile_jobs else None
-        inference_job = next(iter(inference_jobs.values())) if inference_jobs else None
-        compile_job = next(iter(compile_jobs.values())) if compile_jobs else None
+        profile_job = (
+            next(iter(profile_result.components.values()), None)
+            if profile_result
+            else None
+        )
+        inference_job = (
+            next(iter(inference_result.components.values()), None)
+            if inference_result
+            else None
+        )
+        compile_job = next(iter(compile_result.components.values()), None)
         if profile_job is not None and profile_job.wait():
             tool_versions = ToolVersions.from_job(profile_job)
             tool_versions_are_from_device_job = True
@@ -462,18 +463,16 @@ def export_model(
         )
 
     # 7. Summarizes the results from profiling and inference
-    if not skip_summary and not skip_profiling:
-        for component_name in components:
-            profile_job = profile_jobs[component_name]
+    if not skip_summary and profile_result is not None:
+        for profile_job in profile_result.components.values():
             assert profile_job.wait().success, "Job failed: " + profile_job.url
             profile_data: dict[str, Any] = profile_job.download_profile()
             print_profile_metrics_from_job(profile_job, profile_data)
 
-    if not skip_summary and not skip_inferencing:
+    if not skip_summary and inference_result is not None:
         for component_name in components:
             component = model.components[component_name]
-
-            inference_job = inference_jobs[component_name]
+            inference_job = inference_result.components[component_name]
             sample_inputs = component.sample_inputs(
                 input_specs[component_name], use_channel_last_format=False
             )
@@ -483,10 +482,10 @@ def export_model(
                 return_channel_last_output=target_runtime.channel_last_native_execution,
             )
             assert inference_job.wait().success, "Job failed: " + inference_job.url
-            inference_result = inference_job.download_output_data()
-            assert inference_result is not None
+            ij_output = inference_job.download_output_data()
+            assert ij_output is not None
             print_inference_metrics(
-                inference_job, inference_result, torch_out, component.get_output_names()
+                inference_job, ij_output, torch_out, component.get_output_names()
             )
 
     if not skip_summary:
@@ -496,15 +495,10 @@ def export_model(
         print(f"{model_name} was saved to {downloaded_model_path}\n")
 
     return CollectionExportResult(
-        components={
-            component_name: ExportResult(
-                compile_job=compile_jobs[component_name],
-                link_job=link_jobs.get(component_name) if link_jobs else None,
-                inference_job=inference_jobs.get(component_name, None),
-                profile_job=profile_jobs.get(component_name, None),
-            )
-            for component_name in components
-        },
+        compile_jobs=compile_result,
+        link_jobs=link_result,
+        profile_jobs=profile_result,
+        inference_jobs=inference_result,
         download_path=downloaded_model_path,
         tool_versions=tool_versions,
     )

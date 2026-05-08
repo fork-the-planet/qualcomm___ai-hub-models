@@ -27,7 +27,7 @@ from qai_hub_models.utils.base_model import (
     BasePrecompiledModel,
     PrecompiledCollectionModel,
 )
-from qai_hub_models.utils.export_result import CollectionExportResult, ExportResult
+from qai_hub_models.utils.export_result import CollectionExportResult, ComponentGroup
 from qai_hub_models.utils.export_without_hub_access import export_without_hub_access
 from qai_hub_models.utils.path_helpers import get_next_free_path
 from qai_hub_models.utils.printing import (
@@ -40,19 +40,19 @@ from qai_hub_models.utils.qai_hub_helpers import (
 
 
 def link_model(
-    compiled_models: dict[str, hub.Model],
+    compiled_models: ComponentGroup[hub.Model],
     device: hub.Device,
     model_name: str,
     model: PrecompiledCollectionModel,
     target_runtime: TargetRuntime,
     extra_options: str = "",
-) -> dict[str, hub.client.LinkJob]:
+) -> ComponentGroup[hub.client.LinkJob]:
     """Link compiled DLCs to context binary for AOT."""
     assert target_runtime.is_aot_compiled, (
         f"link_model() requires an AOT runtime, got {target_runtime}"
     )
     link_jobs: dict[str, hub.client.LinkJob] = {}
-    for component_name, compiled_model in compiled_models.items():
+    for component_name, compiled_model in compiled_models.components.items():
         component = model.components[component_name]
 
         link_options = component.get_hub_link_options(target_runtime, extra_options)
@@ -63,7 +63,7 @@ def link_model(
             name=f"{model_name}_{component_name}",
             options=link_options,
         )
-    return link_jobs
+    return ComponentGroup(components=link_jobs)
 
 
 def profile_model(
@@ -72,7 +72,7 @@ def profile_model(
     options: dict[str, str],
     uploaded_models: dict[str, hub.Model],
     components: list[str] | None = None,
-) -> dict[str, hub.client.ProfileJob]:
+) -> ComponentGroup[hub.client.ProfileJob]:
     profile_jobs: dict[str, hub.client.ProfileJob] = {}
     for component_name in components or Model.component_class_names:
         print(f"Profiling model {component_name} on a hosted device.")
@@ -85,7 +85,7 @@ def profile_model(
         profile_jobs[component_name] = cast(
             hub.client.ProfileJob, submitted_profile_job
         )
-    return profile_jobs
+    return ComponentGroup(components=profile_jobs)
 
 
 def save_model(
@@ -178,7 +178,6 @@ def export_model(
     Returns
     -------
     CollectionExportResult
-        A Mapping from component_name to:
             * A ProfileJob containing metadata about the profile job (None if profiling skipped).
         * The path to the downloaded model folder (or zip), or None if one or more of: skip_downloading is True, fetch_static_assets is set, or AI Hub Workbench is not accessible
     """
@@ -208,12 +207,7 @@ def export_model(
             component_arg,
             qaihm_version_tag=fetch_static_assets,
         )
-        return CollectionExportResult(
-            components={
-                component_name: ExportResult() for component_name in components
-            },
-            download_path=static_model_path,
-        )
+        return CollectionExportResult(download_path=static_model_path)
 
     hub_device = hub.get_devices(
         name=device.name, attributes=device.attributes, os=device.os
@@ -238,9 +232,9 @@ def export_model(
             uploaded_models[component_name] = hub.upload_model(path)
 
     # 3. Profiles the model performance on a real device
-    profile_jobs: dict[str, hub.client.ProfileJob] = {}
+    profile_result: ComponentGroup[hub.client.ProfileJob] | None = None
     if not skip_profiling:
-        profile_jobs = profile_model(
+        profile_result = profile_model(
             model_name,
             device,
             model.get_hub_profile_options(target_runtime, profile_options),
@@ -252,7 +246,11 @@ def export_model(
     tool_versions: ToolVersions | None = None
     tool_versions_are_from_device_job = False
     if not skip_summary:
-        profile_job = next(iter(profile_jobs.values())) if profile_jobs else None
+        profile_job = (
+            next(iter(profile_result.components.values()), None)
+            if profile_result
+            else None
+        )
         if profile_job is not None and profile_job.wait():
             tool_versions = ToolVersions.from_job(profile_job)
             tool_versions_are_from_device_job = True
@@ -268,9 +266,8 @@ def export_model(
         )
 
     # 6. Summarizes the results from profiling
-    if not skip_summary and not skip_profiling:
-        for component_name in components:
-            profile_job = profile_jobs[component_name]
+    if not skip_summary and profile_result is not None:
+        for profile_job in profile_result.components.values():
             assert profile_job.wait().success, "Job failed: " + profile_job.url
             profile_data: dict[str, Any] = profile_job.download_profile()
             print_profile_metrics_from_job(profile_job, profile_data)
@@ -284,14 +281,8 @@ def export_model(
     print(
         "These models can be deployed on-device using the Genie SDK. For a full tutorial, please follow the instructions here: https://github.com/quic/ai-hub-apps/tree/main/tutorials/llm_on_genie."
     )
-
     return CollectionExportResult(
-        components={
-            component_name: ExportResult(
-                profile_job=profile_jobs.get(component_name, None),
-            )
-            for component_name in components
-        },
+        profile_jobs=profile_result,
         download_path=downloaded_model_path,
         tool_versions=tool_versions,
     )

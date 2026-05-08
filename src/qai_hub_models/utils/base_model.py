@@ -907,7 +907,7 @@ class MultiGraphPretrainedCollectionModel(
 
     def get_input_spec(
         self,
-    ) -> dict[str, dict[str, InputSpec]]:
+    ) -> dict[str, dict[str | None, InputSpec]]:
         """Return input specifications for every component and graph.
 
         For ``MultiGraphBaseModel`` components the inner dict is the
@@ -917,18 +917,18 @@ class MultiGraphPretrainedCollectionModel(
 
         Returns
         -------
-        dict[str, dict[str, InputSpec]]
+        dict[str, dict[str | None, InputSpec]]
             Outer key: component name (e.g. ``"llama3_2_1b_part1_of_3"``).
             Inner key: context-graph name (e.g.
-            ``"token_ar1_cl4096_1_of_3"``).
+            ``"token_ar1_cl4096_1_of_3"``) or None.
             Value: the ``InputSpec`` for that graph.
         """
-        out: dict[str, dict[str, InputSpec]] = {}
+        out: dict[str, dict[str | None, InputSpec]] = {}
         for comp_name, component in self.components.items():
             if isinstance(component, MultiGraphBaseModel):
-                out[comp_name] = component.get_input_spec()
+                out[comp_name] = component.get_input_spec()  # type: ignore[assignment]
             else:
-                out[comp_name] = {comp_name: component.get_input_spec()}
+                out[comp_name] = {None: component.get_input_spec()}
         return out
 
     def get_hub_compile_options(

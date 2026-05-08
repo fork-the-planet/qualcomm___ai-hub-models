@@ -40,7 +40,11 @@ from qai_hub_models.utils.base_model import (
     MultiGraphPretrainedCollectionModel,
 )
 from qai_hub_models.utils.compare import torch_inference
-from qai_hub_models.utils.export_result import CollectionExportResult, ExportResult
+from qai_hub_models.utils.export_result import (
+    ComponentGroup,
+    MultiGraphCollectionExportResult,
+    MultiGraphComponentGroup,
+)
 from qai_hub_models.utils.export_without_hub_access import export_without_hub_access
 from qai_hub_models.utils.input_spec import InputSpec, to_hub_input_specs
 from qai_hub_models.utils.onnx.helpers import download_and_unzip_workbench_onnx_model
@@ -63,11 +67,11 @@ def compile_model(
     target_runtime: TargetRuntime,
     precision: Precision,
     output_path: Path,
-    input_specs: dict[str, dict[str, InputSpec]] | None = None,
+    input_specs: dict[str, dict[str | None, InputSpec]] | None = None,
     components: list[str] | None = None,
     extra_options: str = "",
-) -> dict[str, dict[str, hub.client.CompileJob]]:
-    compile_jobs: dict[str, dict[str, hub.client.CompileJob]] = {}
+) -> MultiGraphComponentGroup[hub.client.CompileJob]:
+    compile_jobs: dict[tuple[str, str | None], hub.client.CompileJob] = {}
     all_input_specs = input_specs or model.get_input_spec()
     all_compile_options = model.get_hub_compile_options(
         target_runtime, precision, extra_options, device
@@ -80,12 +84,11 @@ def compile_model(
         )
         graph_specs = all_input_specs[component_name]
         graph_compile_options = all_compile_options[component_name]
-        compile_jobs[component_name] = {}
         # Upload the source model once so every per-graph compile job reuses
         # the same asset instead of re-uploading the .aimet / ONNX bundle.
         uploaded_model = hub.upload_model(model_to_compile)  # type: ignore[arg-type]
         for graph_name, graph_input_spec in graph_specs.items():
-            model_compile_options = graph_compile_options[graph_name]
+            model_compile_options = graph_compile_options[graph_name or component_name]
             print(f"Optimizing model {component_name} to run on-device")
             submitted_compile_job = hub.submit_compile_job(
                 model=uploaded_model,
@@ -94,20 +97,20 @@ def compile_model(
                 name=f"{model_name}_{component_name}",
                 options=model_compile_options,
             )
-            compile_jobs[component_name][graph_name] = cast(
+            compile_jobs[(component_name, graph_name)] = cast(
                 hub.client.CompileJob, submitted_compile_job
             )
-    return compile_jobs
+    return MultiGraphComponentGroup(component_graph_names=compile_jobs)
 
 
 def link_model(
-    compiled_models: dict[str, dict[str, hub.Model]],
+    compiled_models: dict[str, dict[str | None, hub.Model]],
     device: hub.Device,
     model_name: str,
     model: MultiGraphPretrainedCollectionModel,
     target_runtime: TargetRuntime,
     extra_options: str = "",
-) -> dict[str, hub.client.LinkJob]:
+) -> ComponentGroup[hub.client.LinkJob]:
     """Link compiled DLCs to context binary for AOT."""
     assert target_runtime.is_aot_compiled, (
         f"link_model() requires an AOT runtime, got {target_runtime}"
@@ -124,32 +127,31 @@ def link_model(
             name=f"{model_name}_{component_name}",
             options=link_options,
         )
-    return link_jobs
+    return ComponentGroup(components=link_jobs)
 
 
 def profile_model(
     model_name: str,
     device: hub.Device,
     options: dict[str, dict[str, str]],
-    target_models: dict[str, hub.Model],
+    target_models: ComponentGroup[hub.Model],
     components: list[str] | None = None,
-) -> dict[str, dict[str, hub.client.ProfileJob]]:
-    profile_jobs: dict[str, dict[str, hub.client.ProfileJob]] = {}
+) -> MultiGraphComponentGroup[hub.client.ProfileJob]:
+    profile_jobs: dict[tuple[str, str | None], hub.client.ProfileJob] = {}
     for component_name in components or Model.component_class_names:
-        profile_jobs[component_name] = {}
         for graph_name, opts in options.get(component_name, {}).items():
             print(f"Profiling model {component_name} on a hosted device.")
             job_name = f"{model_name}_{component_name}_{graph_name}"
             submitted_profile_job = hub.submit_profile_job(
-                model=target_models[component_name],
+                model=target_models.components[component_name],
                 device=device,
                 name=job_name,
                 options=opts,
             )
-            profile_jobs[component_name][graph_name] = cast(
+            profile_jobs[(component_name, graph_name)] = cast(
                 hub.client.ProfileJob, submitted_profile_job
             )
-    return profile_jobs
+    return MultiGraphComponentGroup(component_graph_names=profile_jobs)
 
 
 def inference_model(
@@ -157,28 +159,29 @@ def inference_model(
     model_name: str,
     device: hub.Device,
     options: dict[str, dict[str, str]],
-    target_models: dict[str, hub.Model],
+    target_models: ComponentGroup[hub.Model],
     components: list[str] | None = None,
-) -> dict[str, dict[str, hub.client.InferenceJob]]:
-    inference_jobs: dict[str, dict[str, hub.client.InferenceJob]] = {}
+) -> MultiGraphComponentGroup[hub.client.InferenceJob]:
+    inference_jobs: dict[tuple[str, str | None], hub.client.InferenceJob] = {}
     for component_name in components or Model.component_class_names:
-        inference_jobs[component_name] = {}
-        for graph_name, graph_inputs in inputs.get(component_name, {}).items():
+        component_inputs = inputs.get(component_name, {})
+        component_opts = options.get(component_name, {})
+        for graph_name, graph_inputs in component_inputs.items():
             print(
                 f"Running inference for {component_name} on a hosted device with example inputs."
             )
             job_name = f"{model_name}_{component_name}_{graph_name}"
             submitted_inference_job = hub.submit_inference_job(
-                model=target_models[component_name],
+                model=target_models.components[component_name],
                 inputs=graph_inputs,
                 device=device,
                 name=job_name,
-                options=options.get(component_name, {}).get(graph_name, ""),
+                options=component_opts.get(graph_name or component_name, ""),
             )
-            inference_jobs[component_name][graph_name] = cast(
+            inference_jobs[(component_name, graph_name)] = cast(
                 hub.client.InferenceJob, submitted_inference_job
             )
-    return inference_jobs
+    return MultiGraphComponentGroup(component_graph_names=inference_jobs)
 
 
 def download_model(
@@ -187,7 +190,7 @@ def download_model(
     runtime: TargetRuntime,
     precision: Precision,
     tool_versions: ToolVersions,
-    target_models: dict[str, hub.Model],
+    target_models: ComponentGroup[hub.Model],
     zip_assets: bool,
     hub_device: hub.Device | None = None,
 ) -> Path:
@@ -200,7 +203,7 @@ def download_model(
 
         # Download models and capture filenames, then generate metadata
         model_file_metadata = {}
-        for component_name, target_model in target_models.items():
+        for component_name, target_model in target_models.components.items():
             if target_model.model_type == hub.SourceModelType.ONNX:
                 onnx_result = download_and_unzip_workbench_onnx_model(
                     target_model, dst_path, component_name
@@ -269,7 +272,7 @@ def export_model(
     fetch_static_assets: str | None = None,
     zip_assets: bool = False,
     **additional_model_kwargs: Any,
-) -> CollectionExportResult:
+) -> MultiGraphCollectionExportResult:
     """
     This function executes the following recipe:
 
@@ -323,8 +326,7 @@ def export_model(
 
     Returns
     -------
-    CollectionExportResult
-        A Mapping from component_name to:
+    MultiGraphCollectionExportResult
             * A CompileJob object containing metadata about the compile job submitted to hub.
             * An InferenceJob containing metadata about the inference job (None if inferencing skipped).
             * A ProfileJob containing metadata about the profile job (None if profiling skipped).
@@ -359,12 +361,7 @@ def export_model(
             component_arg,
             qaihm_version_tag=fetch_static_assets,
         )
-        return CollectionExportResult(
-            components={
-                component_name: ExportResult() for component_name in components
-            },
-            download_path=static_model_path,
-        )
+        return MultiGraphCollectionExportResult(download_path=static_model_path)
 
     hub_device = hub.get_devices(
         name=device.name, attributes=device.attributes, os=device.os
@@ -381,7 +378,7 @@ def export_model(
     input_specs = model.get_input_spec()
 
     # 2. Compiles the model to an asset that can be run on device
-    compile_jobs: dict[str, dict[str, hub.client.CompileJob]] = compile_model(
+    compile_result = compile_model(
         model,
         model_name,
         device,
@@ -393,17 +390,17 @@ def export_model(
         extra_options=compile_options,
     )
 
-    link_jobs: dict[str, hub.client.LinkJob] | None = None
-    target_models: dict[str, hub.Model]
+    link_result: ComponentGroup[hub.client.LinkJob] | None = None
+    target_models: ComponentGroup[hub.Model]
     if target_runtime.uses_hub_link:
-        compiled_models: dict[str, dict[str, hub.Model]] = {}
-        for comp_name, jobs_dict in compile_jobs.items():
-            compiled_models[comp_name] = {}
-            for gn, job in jobs_dict.items():
-                target_model = job.get_target_model()
-                assert target_model is not None, f"Compile job failed: {job}"
-                compiled_models[comp_name][gn] = target_model
-        link_jobs = link_model(
+        compiled_models: dict[str, dict[str | None, hub.Model]] = {}
+        for (comp_name, gn), job in compile_result.component_graph_names.items():
+            if comp_name not in compiled_models:
+                compiled_models[comp_name] = {}
+            tm = job.get_target_model()
+            assert tm is not None, f"Compile job failed: {job}"
+            compiled_models[comp_name][gn] = tm
+        link_result = link_model(
             compiled_models,
             device,
             model_name,
@@ -411,11 +408,18 @@ def export_model(
             target_runtime,
         )
         # Extract target models from link jobs for profile/inference
-        target_models = assert_success_and_get_target_models(link_jobs)
+        target_models = assert_success_and_get_target_models(link_result)
     else:
-        # For JIT runtimes, extract models from compile jobs
-        flat_jobs = {k: next(iter(v.values())) for k, v in compile_jobs.items()}
-        target_models = assert_success_and_get_target_models(flat_jobs)
+        # For JIT runtimes, extract one model per component from compile jobs
+        flat_jobs: dict[str, hub.client.CompileJob] = {}
+        seen_components: set[str] = set()
+        for (comp_name, _gn), job in compile_result.component_graph_names.items():
+            if comp_name not in seen_components:
+                flat_jobs[comp_name] = job
+                seen_components.add(comp_name)
+        target_models = assert_success_and_get_target_models(
+            ComponentGroup(components=flat_jobs)
+        )
     per_component_profile_options = model.get_hub_profile_options(
         target_runtime, profile_options
     )
@@ -424,9 +428,9 @@ def export_model(
     )
 
     # 3. Profiles the model performance on a real device
-    profile_jobs: dict[str, dict[str, hub.client.ProfileJob]] = {}
+    profile_result: MultiGraphComponentGroup[hub.client.ProfileJob] | None = None
     if not skip_profiling:
-        profile_jobs = profile_model(
+        profile_result = profile_model(
             model_name,
             device,
             per_component_profile_options,
@@ -435,9 +439,9 @@ def export_model(
         )
 
     # 4. Inferences the model on sample inputs
-    inference_jobs: dict[str, dict[str, hub.client.InferenceJob]] = {}
+    inference_result: MultiGraphComponentGroup[hub.client.InferenceJob] | None = None
     if not skip_inferencing:
-        inference_jobs = inference_model(
+        inference_result = inference_model(
             per_component_inference_inputs,
             model_name,
             device,
@@ -450,16 +454,17 @@ def export_model(
     tool_versions: ToolVersions | None = None
     tool_versions_are_from_device_job = False
     if not skip_summary or not skip_downloading:
-        first_profile_jobs_dict = (
-            next(iter(profile_jobs.values()), {}) if profile_jobs else {}
+        first_profile_job = (
+            next(iter(profile_result.component_graph_names.values()), None)
+            if profile_result
+            else None
         )
-        first_profile_job = next(iter(first_profile_jobs_dict.values()), None)
-        first_inference_jobs_dict = (
-            next(iter(inference_jobs.values()), {}) if inference_jobs else {}
+        inference_job = (
+            next(iter(inference_result.component_graph_names.values()), None)
+            if inference_result
+            else None
         )
-        inference_job = next(iter(first_inference_jobs_dict.values()), None)
-        first_compile_jobs_dict = next(iter(compile_jobs.values()), {})
-        compile_job = next(iter(first_compile_jobs_dict.values()), None)
+        compile_job = next(iter(compile_result.component_graph_names.values()), None)
         if first_profile_job is not None and first_profile_job.wait():
             tool_versions = ToolVersions.from_job(first_profile_job)
             tool_versions_are_from_device_job = True
@@ -487,19 +492,20 @@ def export_model(
         )
 
     # 7. Summarizes the results from profiling and inference
-    if not skip_summary and not skip_profiling:
-        for component_name in components:
-            for pj in profile_jobs[component_name].values():
-                assert pj.wait().success, "Job failed: " + pj.url
-                profile_data: dict[str, Any] = pj.download_profile()
-                print_profile_metrics_from_job(pj, profile_data)
+    if not skip_summary and profile_result is not None:
+        for pj in profile_result.component_graph_names.values():
+            assert pj.wait().success, "Job failed: " + pj.url
+            profile_data: dict[str, Any] = pj.download_profile()
+            print_profile_metrics_from_job(pj, profile_data)
 
-    if not skip_summary and not skip_inferencing:
+    if not skip_summary and inference_result is not None:
         all_specs = model.get_input_spec()
         for component_name in components:
             component = model.components[component_name]
             for graph_name, graph_input_spec in all_specs[component_name].items():
-                ij = inference_jobs[component_name][graph_name]
+                ij = inference_result.component_graph_names[
+                    (component_name, graph_name)
+                ]
                 sample_inputs = BaseModel.sample_inputs(
                     component, graph_input_spec, use_channel_last_format=False
                 )
@@ -509,10 +515,10 @@ def export_model(
                     return_channel_last_output=target_runtime.channel_last_native_execution,
                 )
                 assert ij.wait().success, "Job failed: " + ij.url
-                inference_result = ij.download_output_data()
-                assert inference_result is not None
+                ij_output = ij.download_output_data()
+                assert ij_output is not None
                 print_inference_metrics(
-                    ij, inference_result, torch_out, component.get_output_names()
+                    ij, ij_output, torch_out, component.get_output_names()
                 )
 
     if not skip_summary:
@@ -521,22 +527,11 @@ def export_model(
     if downloaded_model_path:
         print(f"{model_name} was saved to {downloaded_model_path}\n")
 
-    return CollectionExportResult(
-        components={
-            component_name: ExportResult(
-                compile_job=next(iter(compile_jobs[component_name].values())),
-                link_job=link_jobs.get(component_name)
-                if (target_runtime.uses_hub_link and link_jobs)
-                else None,
-                inference_job=next(iter(inference_jobs[component_name].values()), None)
-                if component_name in inference_jobs
-                else None,
-                profile_job=next(iter(profile_jobs[component_name].values()), None)
-                if component_name in profile_jobs
-                else None,
-            )
-            for component_name in components
-        },
+    return MultiGraphCollectionExportResult(
+        compile_jobs=compile_result,
+        link_jobs=link_result,
+        profile_jobs=profile_result,
+        inference_jobs=inference_result,
         download_path=downloaded_model_path,
         tool_versions=tool_versions,
     )

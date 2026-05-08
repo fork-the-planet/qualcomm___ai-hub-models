@@ -41,8 +41,8 @@ from qai_hub_models.utils.args import (
 from qai_hub_models.utils.asset_loaders import ASSET_CONFIG
 from qai_hub_models.utils.compare import torch_inference
 from qai_hub_models.utils.export_result import (
-    CollectionExportResult,
     ExportResult,
+    LegacyCollectionExportResult,
 )
 from qai_hub_models.utils.input_spec import to_hub_input_specs
 from qai_hub_models.utils.model_cache import CacheMode, get_or_create_cached_model
@@ -180,7 +180,7 @@ def export_model(
     onnx_export_dir: str = "",
     zip_assets: bool = False,
     **additional_model_kwargs: Any,
-) -> CollectionExportResult:
+) -> LegacyCollectionExportResult:
     """
     Export the given LLM class for use with Genie or ONNX Runtime GenAI.
 
@@ -238,7 +238,7 @@ def export_model(
 
     Returns
     -------
-    CollectionExportResult
+    LegacyCollectionExportResult
         A Mapping from component_name to:
             * A LinkJob object containing metadata about the link job submitted to hub
             * A ProfileJob containing metadata about the profile job (None if profiling skipped).
@@ -725,7 +725,7 @@ def export_model(
         )
         shutil.rmtree(output_path)
 
-    return CollectionExportResult(
+    return LegacyCollectionExportResult(
         components={
             sub_component_name: ExportResult(
                 compile_job=compile_jobs[sub_component_name],

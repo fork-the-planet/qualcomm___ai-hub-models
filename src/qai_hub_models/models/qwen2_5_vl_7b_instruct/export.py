@@ -38,7 +38,11 @@ from qai_hub_models.utils.asset_loaders import (
 )
 from qai_hub_models.utils.base_model import PretrainedCollectionModel
 from qai_hub_models.utils.compare import torch_inference
-from qai_hub_models.utils.export_result import CollectionExportResult, ExportResult
+from qai_hub_models.utils.export_result import (
+    ComponentGroup,
+    ExportResult,
+    LegacyCollectionExportResult,
+)
 from qai_hub_models.utils.export_without_hub_access import export_without_hub_access
 from qai_hub_models.utils.onnx.helpers import download_and_unzip_workbench_onnx_model
 from qai_hub_models.utils.path_helpers import get_next_free_path
@@ -269,7 +273,7 @@ def export_model(
     fetch_static_assets: str | None = None,
     zip_assets: bool = False,
     **additional_model_kwargs: Any,
-) -> CollectionExportResult:
+) -> LegacyCollectionExportResult:
     """
     This function executes the following recipe:
 
@@ -323,7 +327,7 @@ def export_model(
 
     Returns
     -------
-    CollectionExportResult
+    LegacyCollectionExportResult
         A Mapping from component_name to:
             * A CompileJob object containing metadata about the compile job submitted to hub.
             * An InferenceJob containing metadata about the inference job (None if inferencing skipped).
@@ -358,7 +362,7 @@ def export_model(
             component_arg,
             qaihm_version_tag=fetch_static_assets,
         )
-        return CollectionExportResult(
+        return LegacyCollectionExportResult(
             components={
                 component_name: ExportResult() for component_name in components
             },
@@ -418,11 +422,15 @@ def export_model(
             target_runtime,
         )
         # Extract target models from link jobs for profile/inference
-        target_models = assert_success_and_get_target_models(link_jobs)
+        target_models = assert_success_and_get_target_models(
+            ComponentGroup(components=link_jobs)
+        ).components
     else:
         # For JIT runtimes, extract models from compile jobs
         flat_jobs = {k: v[0] for k, v in compile_jobs.items()}
-        target_models = assert_success_and_get_target_models(flat_jobs)
+        target_models = assert_success_and_get_target_models(
+            ComponentGroup(components=flat_jobs)
+        ).components
 
     # Build profile options; one entry per context graph so each gets its own profile job
     per_component_profile_options: dict[str, list[tuple[str, str | None]]] = {}
@@ -559,7 +567,7 @@ def export_model(
     if downloaded_model_path:
         print(f"{model_name} was saved to {downloaded_model_path}\n")
 
-    return CollectionExportResult(
+    return LegacyCollectionExportResult(
         components={
             component_name: ExportResult(
                 compile_job=compile_jobs[component_name][0],

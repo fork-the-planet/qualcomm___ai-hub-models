@@ -297,9 +297,9 @@ def _populate_tflite_compile_failures(scorecard_df: pd.DataFrame) -> pd.DataFram
 
 def main() -> None:
     args = get_parser().parse_args()
-    scorecard_csv = Path(args.scorecard_csv or ScorecardArtifact.EXPORT_CSV.path)
+    scorecard_csv = Path(args.scorecard_csv or ScorecardArtifact.EXPORT_CSV.touch())
     results_csv = Path(args.results_file or ScorecardArtifact.RESULTS_CSV.touch())
-    accuracy_csv = Path(args.accuracy_csv or ScorecardArtifact.ACCURACY_CSV.path)
+    accuracy_csv = Path(args.accuracy_csv or ScorecardArtifact.ACCURACY_CSV.touch())
 
     scorecard_df = prepare_raw_data(scorecard_csv, accuracy_csv)
     scorecard_df = _populate_tflite_compile_failures(scorecard_df)

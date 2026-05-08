@@ -18,7 +18,7 @@ from qai_hub_models.scorecard import (
     ScorecardProfilePath,
 )
 from qai_hub_models.scorecard.device import cs_universal
-from qai_hub_models.scorecard.results.scorecard_job import JobTypeVar
+from qai_hub_models.scorecard.results.scorecard_job import JobTypeVar  # noqa: F401
 
 
 def _job_id(
@@ -217,54 +217,6 @@ class ScJobParams:
             self.component,
             self.graph_name,
         )
-
-    @staticmethod
-    def from_export_output(
-        export_output: JobTypeVar
-        | dict[str, dict[str, JobTypeVar]]
-        | dict[str, JobTypeVar],
-        params: ScExportTestParams,
-    ) -> dict[ScJobParams, JobTypeVar]:
-        """Convert the output of an export script function to a dict of job parameters objects."""
-        out: dict[ScJobParams, JobTypeVar] = {}
-        if isinstance(export_output, dict):
-            for component_name, job_or_jobs in export_output.items():
-                if isinstance(job_or_jobs, dict):
-                    for graph_name, job in job_or_jobs.items():
-                        out[
-                            ScJobParams(
-                                params.model_id,
-                                params.precision,
-                                params.path,
-                                params.device,
-                                component_name,
-                                graph_name=graph_name,
-                            )
-                        ] = job
-                else:
-                    out[
-                        ScJobParams(
-                            params.model_id,
-                            params.precision,
-                            params.path,
-                            params.device,
-                            component_name,
-                            graph_name=None,
-                        )
-                    ] = job_or_jobs
-        else:
-            out[
-                ScJobParams(
-                    params.model_id,
-                    params.precision,
-                    params.path,
-                    params.device,
-                    component=None,
-                    graph_name=None,
-                )
-            ] = export_output
-
-        return out
 
 
 @final

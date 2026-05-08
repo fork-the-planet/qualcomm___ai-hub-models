@@ -33,6 +33,11 @@ from qai_hub_models.scorecard.results.scorecard_job import (
     ScorecardJobTypeVar,
 )
 from qai_hub_models.utils.base_config import BaseQAIHMConfig
+from qai_hub_models.utils.export_result import (
+    ComponentGroup,
+    MultiGraphComponentGroup,
+    MultiGraphGroup,
+)
 
 ScorecardJobYamlTypeVar = TypeVar("ScorecardJobYamlTypeVar", bound="ScorecardJobYaml")
 
@@ -260,17 +265,69 @@ class ScorecardJobYaml(Generic[ScorecardJobTypeVar]):
         self,
         export_output: None
         | JobTypeVar
-        | dict[str, dict[str, JobTypeVar]]
-        | dict[str, JobTypeVar],
+        | MultiGraphGroup[JobTypeVar]
+        | ComponentGroup[JobTypeVar]
+        | MultiGraphComponentGroup[JobTypeVar],
         test_params: ScExportTestParams,
     ) -> None:
         """From the output of a step in export.py, populate this cache."""
         if export_output is None:
             raise ValueError("Export output is missing.")
-        for job_params, job in ScJobParams.from_export_output(
-            export_output, test_params
-        ).items():
-            self.set_job_id(job.job_id, job_params)
+
+        if isinstance(export_output, MultiGraphComponentGroup):
+            for (
+                component,
+                graph_name,
+            ), job in export_output.component_graph_names.items():
+                self.set_job_id(
+                    job.job_id,
+                    ScJobParams(
+                        test_params.model_id,
+                        test_params.precision,
+                        test_params.path,
+                        test_params.device,
+                        component,
+                        graph_name=graph_name,
+                    ),
+                )
+        elif isinstance(export_output, ComponentGroup):
+            for component, job in export_output.components.items():
+                self.set_job_id(
+                    job.job_id,
+                    ScJobParams(
+                        test_params.model_id,
+                        test_params.precision,
+                        test_params.path,
+                        test_params.device,
+                        component,
+                        graph_name=None,
+                    ),
+                )
+        elif isinstance(export_output, MultiGraphGroup):
+            for graph_name, job in export_output.graph_names.items():
+                self.set_job_id(
+                    job.job_id,
+                    ScJobParams(
+                        test_params.model_id,
+                        test_params.precision,
+                        test_params.path,
+                        test_params.device,
+                        component=None,
+                        graph_name=graph_name,
+                    ),
+                )
+        else:
+            self.set_job_id(
+                export_output.job_id,
+                ScJobParams(
+                    test_params.model_id,
+                    test_params.precision,
+                    test_params.path,
+                    test_params.device,
+                    component=None,
+                    graph_name=None,
+                ),
+            )
 
     def get_export_output(
         self,
@@ -279,7 +336,13 @@ class ScorecardJobYaml(Generic[ScorecardJobTypeVar]):
         wait_for_job_max_seconds: int | None = None,
         raise_if_not_successful: bool = True,
         raise_if_jobs_are_missing: bool = True,
-    ) -> JobTypeVar | dict[str, JobTypeVar] | dict[str, dict[str, JobTypeVar]] | None:
+    ) -> (
+        JobTypeVar
+        | MultiGraphGroup[JobTypeVar]
+        | ComponentGroup[JobTypeVar]
+        | MultiGraphComponentGroup[JobTypeVar]
+        | None
+    ):
         """Load the output of a step in export.py that would have generated this cache."""
         all_jobs = self.get_all_jobs(
             test_params,
@@ -296,19 +359,15 @@ class ScorecardJobYaml(Generic[ScorecardJobTypeVar]):
 
         if has_graph_names:
             if has_components:
-                out_gn_comps: dict[str, dict[str, JobTypeVar]] = {}
+                mgcg_components: dict[tuple[str, str | None], JobTypeVar] = {}
                 for job_params, sc_job in all_jobs.items():
-                    assert (
-                        job_params.component is not None
-                        and job_params.graph_name is not None
+                    assert job_params.component is not None
+                    if sc_job is None:
+                        continue
+                    mgcg_components[(job_params.component, job_params.graph_name)] = (
+                        sc_job.job
                     )
-                    if sc_job is not None:
-                        if job_params.component not in out_gn_comps:
-                            out_gn_comps[job_params.component] = {}
-                        out_gn_comps[job_params.component][job_params.graph_name] = (
-                            sc_job.job
-                        )
-                return out_gn_comps
+                return MultiGraphComponentGroup(component_graph_names=mgcg_components)
             out_gn: dict[str, JobTypeVar] = {}
             for job_params, sc_job in all_jobs.items():
                 assert (
@@ -316,7 +375,7 @@ class ScorecardJobYaml(Generic[ScorecardJobTypeVar]):
                 )
                 if sc_job is not None:
                     out_gn[job_params.graph_name] = sc_job.job
-            return out_gn
+            return MultiGraphGroup(graph_names=out_gn)
 
         if has_components:
             out_comp: dict[str, JobTypeVar] = {}
@@ -326,7 +385,7 @@ class ScorecardJobYaml(Generic[ScorecardJobTypeVar]):
                 )
                 if sc_job is not None:
                     out_comp[job_params.component] = sc_job.job
-            return out_comp
+            return ComponentGroup(components=out_comp)
 
         if len(all_jobs) == 0:
             return None
