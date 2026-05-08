@@ -320,6 +320,7 @@ devices:
     form_factor: Compute
     vendor: qualcomm
     icon: Laptop_X_Elite
+    enabled_in_scorecard: true
   Snapdragon X2 Elite CRD:
     chipset: qualcomm-snapdragon-x2-elite
     os:

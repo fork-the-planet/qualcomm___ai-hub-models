@@ -28,6 +28,7 @@ _RUNNING_STATES = {
 # Map from hub device names to QDC target device names
 HUB_DEVICE_TO_QDC_DEVICE_MAP = {
     "Snapdragon X Elite CRD": "SC8380XP",
+    "Snapdragon X Plus 8-Core CRD": "SC8340XP",
     "Snapdragon X2 Elite CRD": "SC8480XP",
     "Snapdragon 8 Elite QRD": "SM8750",
     "Samsung Galaxy S25": "SM8750",

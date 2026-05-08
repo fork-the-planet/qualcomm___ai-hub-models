@@ -650,6 +650,13 @@ cs_x_elite = ScorecardDevice(
     reference_device_name="Snapdragon X Elite CRD",
 )
 
+cs_x_plus_8_core = ScorecardDevice(
+    name="cs_x_plus_8_core",
+    reference_device_name="Snapdragon X Plus 8-Core CRD",
+    compile_paths=[ScorecardCompilePath.GENIE],
+    profile_paths=[ScorecardProfilePath.GENIE],
+)
+
 cs_x2_elite = ScorecardDevice(
     name="cs_x2_elite",
     reference_device_name="Snapdragon X2 Elite CRD",
