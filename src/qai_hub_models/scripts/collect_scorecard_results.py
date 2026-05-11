@@ -371,7 +371,7 @@ def process_e2e_recipe_model(
         model_card_without_failures = QAIHMModelPerf() if write_model_card else None
         for summary in summaries:
             summary.add_to_perf(model_card, include_failures=True)
-            if model_card_without_failures:
+            if model_card_without_failures and summary.params.path.is_published:
                 summary.add_to_perf(model_card_without_failures, include_failures=False)
 
         if model_card_without_failures:

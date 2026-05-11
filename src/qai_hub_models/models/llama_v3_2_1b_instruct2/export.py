@@ -104,7 +104,7 @@ def compile_model(
 
 
 def link_model(
-    compiled_models: dict[str, dict[str | None, hub.Model]],
+    compiled_models: MultiGraphComponentGroup[hub.Model],
     device: hub.Device,
     model_name: str,
     model: MultiGraphPretrainedCollectionModel,
@@ -116,13 +116,17 @@ def link_model(
         f"link_model() requires an AOT runtime, got {target_runtime}"
     )
     link_jobs: dict[str, hub.client.LinkJob] = {}
-    for component_name, model_dict in compiled_models.items():
+    # Group compiled models by component for linking
+    grouped: dict[str, list[hub.Model]] = {}
+    for (comp_name, _gn), m in compiled_models.component_graph_names.items():
+        grouped.setdefault(comp_name, []).append(m)
+    for component_name, models_list in grouped.items():
         component = model.components[component_name]
 
         link_options = component.get_hub_link_options(target_runtime, extra_options)
         print(f"Linking {component_name} to context binary")
         link_jobs[component_name] = hub.submit_link_job(
-            list(model_dict.values()),
+            models_list,  # type: ignore[arg-type]
             device=device,
             name=f"{model_name}_{component_name}",
             options=link_options,
@@ -393,13 +397,7 @@ def export_model(
     link_result: ComponentGroup[hub.client.LinkJob] | None = None
     target_models: ComponentGroup[hub.Model]
     if target_runtime.uses_hub_link:
-        compiled_models: dict[str, dict[str | None, hub.Model]] = {}
-        for (comp_name, gn), job in compile_result.component_graph_names.items():
-            if comp_name not in compiled_models:
-                compiled_models[comp_name] = {}
-            tm = job.get_target_model()
-            assert tm is not None, f"Compile job failed: {job}"
-            compiled_models[comp_name][gn] = tm
+        compiled_models = assert_success_and_get_target_models(compile_result)
         link_result = link_model(
             compiled_models,
             device,

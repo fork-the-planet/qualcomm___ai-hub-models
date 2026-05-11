@@ -280,15 +280,18 @@ def patch_hub_with_cached_jobs(
         YamlT: type[ScorecardJobYaml[ScorecardJobTypeVar]],
     ) -> Iterable[ScorecardJobTypeVar] | None:
         yaml = YamlT.from_test_artifacts()
-        jobs = yaml.get_all_jobs(params, raise_if_not_successful=True).values()
-        if (
+        jobs_can_be_missing = (
             params.precision == Precision.mixed_with_float
             and YamlT == QuantizeScorecardJobYaml
-        ):
+        )
+        jobs = yaml.get_all_jobs(
+            params,
+            raise_if_not_successful=True,
+            raise_if_jobs_are_missing=not jobs_can_be_missing,
+        ).values()
+        if jobs_can_be_missing:
             # All jobs must be defined unless we're targeting mixed_with_float
             return [x for x in jobs if x is not None]
-        if any(x is None for x in jobs):
-            return None
         return cast(Iterable[ScorecardJobTypeVar], jobs)
 
     with ThreadPoolExecutor() as pool:
@@ -1816,7 +1819,11 @@ def accuracy_on_dataset_via_evaluate_and_export(
         # Get existing inference jobs, then create related patches
         # This will raise a ValueError if any of the jobs failed
         inference_sc_jobs = (
-            InferenceScorecardJobYaml.from_test_artifacts().get_all_jobs(test_params)
+            InferenceScorecardJobYaml.from_test_artifacts().get_all_jobs(
+                test_params,
+                raise_if_not_successful=True,
+                raise_if_jobs_are_missing=True,
+            )
         )
     except (CachedScorecardJobError, ValueError):
         # If no on-device accuracy numbers, we still want to write torch, sim numbers
@@ -2040,7 +2047,7 @@ def sim_accuracy_on_dataset(
         dataset_name, scorecard_path, model.__class__
     )
     quantize_sc_jobs = QuantizeScorecardJobYaml.from_test_artifacts().get_all_jobs(
-        test_params
+        test_params, raise_if_not_successful=True, raise_if_jobs_are_missing=True
     )
     quantize_jobs = [x.job for x in quantize_sc_jobs.values() if x is not None]
     num_samples = get_num_eval_samples(dataset_name)

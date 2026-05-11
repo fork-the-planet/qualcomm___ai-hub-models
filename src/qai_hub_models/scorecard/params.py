@@ -7,7 +7,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import dataclass
 from functools import cached_property
-from typing import cast, final
+from typing import Generic, TypeVar, cast, final
 
 from qai_hub import JobType
 
@@ -19,6 +19,10 @@ from qai_hub_models.scorecard import (
 )
 from qai_hub_models.scorecard.device import cs_universal
 from qai_hub_models.scorecard.results.scorecard_job import JobTypeVar  # noqa: F401
+
+ScorecardPathT = TypeVar(
+    "ScorecardPathT", ScorecardProfilePath, ScorecardCompilePath, None
+)
 
 
 def _job_id(
@@ -62,16 +66,16 @@ def _str_with_description(
 
 @final
 @dataclass
-class ScJobParams:
+class ScJobParams(Generic[ScorecardPathT]):
     """The parameters necessary to identify a job in the scorecard."""
 
     model_id: str
 
+    # Optional because sc path is not necessary to identify quantize or pre-quantize-compile jobs.
+    path: ScorecardPathT
+
     # Optional because precision is not necessary to identify pre-quantize-compile jobs.
     precision: Precision | None = None
-
-    # Optional because sc path is not necessary to identify quantize or pre-quantize-compile jobs.
-    path: ScorecardProfilePath | ScorecardCompilePath | None = None
 
     # Optional because device is not necessary to identify quantize jobs and some compile jobs.
     device: ScorecardDevice | None = None
@@ -221,14 +225,14 @@ class ScJobParams:
 
 @final
 @dataclass
-class ScExportTestParams:
+class ScExportTestParams(Generic[ScorecardPathT]):
     """
     The necessary parameters to identify all jobs that run as a part of a single export test.
     A "single export test" is equal to a user running the export script (one model + runtime + precision + device).
     """
 
     model_id: str
-    path: ScorecardProfilePath | ScorecardCompilePath | None = None
+    path: ScorecardPathT
     precision: Precision | None = None
     device: ScorecardDevice | None = None
     component_names: list[str] | None = None
@@ -266,7 +270,7 @@ class ScExportTestParams:
         return [(None, None)]
 
     @property
-    def all_pre_qdq_compile_job_params(self) -> list[ScJobParams]:
+    def all_pre_qdq_compile_job_params(self) -> list[ScJobParams[ScorecardCompilePath]]:
         """A list of all expected pre-QDQ compile jobs for this export test."""
         components: Sequence[str | None] = self.component_names or cast(
             list[str | None], [None]
@@ -282,7 +286,7 @@ class ScExportTestParams:
         ]
 
     @property
-    def all_quantize_job_params(self) -> list[ScJobParams]:
+    def all_quantize_job_params(self) -> list[ScJobParams[None]]:
         """A list of all expected quantize jobs for this export test."""
         if self.precision == Precision.float or self.precision is None:
             return []
@@ -296,23 +300,24 @@ class ScExportTestParams:
         return [
             ScJobParams(
                 self.model_id,
-                self.precision,
+                path=None,
+                precision=self.precision,
                 component=component,
             )
             for component in components
         ]
 
     @property
-    def all_compile_job_params(self) -> list[ScJobParams]:
+    def all_compile_job_params(self) -> list[ScJobParams[ScorecardCompilePath]]:
         """A list of all expected compile jobs for this export test."""
         assert self.path is not None and self.precision is not None
         return [
             ScJobParams(
                 self.model_id,
-                self.precision,
                 path=self.path.compile_path
                 if isinstance(self.path, ScorecardProfilePath)
                 else self.path,
+                precision=self.precision,
                 device=self.device,
                 component=component,
                 graph_name=graph_name,
@@ -321,7 +326,7 @@ class ScExportTestParams:
         ]
 
     @property
-    def all_link_job_params(self) -> list[ScJobParams]:
+    def all_link_job_params(self) -> list[ScJobParams[ScorecardCompilePath]]:
         """A list of all expected link jobs for this export test."""
         assert (
             self.path is not None
@@ -335,10 +340,10 @@ class ScExportTestParams:
         return [
             ScJobParams(
                 self.model_id,
-                self.precision,
                 path=self.path.compile_path
                 if isinstance(self.path, ScorecardProfilePath)
                 else self.path,
+                precision=self.precision,
                 device=self.device,
                 component=component,
             )
@@ -346,7 +351,7 @@ class ScExportTestParams:
         ]
 
     @property
-    def all_device_job_params(self) -> list[ScJobParams]:
+    def all_device_job_params(self) -> list[ScJobParams[ScorecardProfilePath]]:
         """A list of all expected device jobs for this export test."""
         assert (
             isinstance(self.path, ScorecardProfilePath)
@@ -356,8 +361,8 @@ class ScExportTestParams:
         return [
             ScJobParams(
                 self.model_id,
-                self.precision,
                 path=self.path,
+                precision=self.precision,
                 device=self.device,
                 component=component,
                 graph_name=graph_name,

@@ -236,8 +236,8 @@ class ScorecardJobYaml(ScorecardYamlFile[str], Generic[ScorecardJobTypeVar]):
                     job.job_id,
                     ScJobParams(
                         test_params.model_id,
-                        test_params.precision,
                         test_params.path,
+                        test_params.precision,
                         test_params.device,
                         component,
                         graph_name=graph_name,
@@ -249,8 +249,8 @@ class ScorecardJobYaml(ScorecardYamlFile[str], Generic[ScorecardJobTypeVar]):
                     job.job_id,
                     ScJobParams(
                         test_params.model_id,
-                        test_params.precision,
                         test_params.path,
+                        test_params.precision,
                         test_params.device,
                         component,
                         graph_name=None,
@@ -262,8 +262,8 @@ class ScorecardJobYaml(ScorecardYamlFile[str], Generic[ScorecardJobTypeVar]):
                     job.job_id,
                     ScJobParams(
                         test_params.model_id,
-                        test_params.precision,
                         test_params.path,
+                        test_params.precision,
                         test_params.device,
                         component=None,
                         graph_name=graph_name,
@@ -274,8 +274,8 @@ class ScorecardJobYaml(ScorecardYamlFile[str], Generic[ScorecardJobTypeVar]):
                 export_output.job_id,
                 ScJobParams(
                     test_params.model_id,
-                    test_params.precision,
                     test_params.path,
+                    test_params.precision,
                     test_params.device,
                     component=None,
                     graph_name=None,

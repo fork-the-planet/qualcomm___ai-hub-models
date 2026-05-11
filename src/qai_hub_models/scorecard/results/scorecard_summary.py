@@ -5,7 +5,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import final
+from typing import Generic, final
 
 from qai_hub import JobType
 
@@ -22,7 +22,11 @@ from qai_hub_models.scorecard.execution_helpers import (
     get_evaluation_parameterized_pytest_config,
     get_profile_parameterized_pytest_config,
 )
-from qai_hub_models.scorecard.params import ScExportTestParams, ScJobParams
+from qai_hub_models.scorecard.params import (
+    ScExportTestParams,
+    ScJobParams,
+    ScorecardPathT,
+)
 from qai_hub_models.scorecard.results.chipset_helpers import (
     get_supported_devices,
     sorted_chipsets,
@@ -54,7 +58,7 @@ MAX_ACCEPTABLE_INFERENCE_TIME_MS = 4000
 
 @final
 @dataclass
-class ScorecardJobSummary:
+class ScorecardJobSummary(Generic[ScorecardPathT]):
     """
     Stores job in scorecard along with its prerequisite jobs.
     When all jobs are set, a single instance of this class is equivalent to a row in the final csv produced in the scorecard results.
@@ -63,7 +67,7 @@ class ScorecardJobSummary:
     Each row has a unique profile / inference job, but prerequisite jobs may be shared between rows.
     """
 
-    params: ScJobParams
+    params: ScJobParams[ScorecardPathT]
     pre_qdq_onnx_compile_job: CompileScorecardJob | None = None
     quantize_job: QuantizeScorecardJob | None = None
     compile_job: CompileScorecardJob | None = None
@@ -118,11 +122,14 @@ class ScorecardJobSummary:
             else None,
         )
 
-    def add_to_perf(self, perf: QAIHMModelPerf, include_failures: bool = False) -> None:
+    def add_to_perf(
+        self: ScorecardJobSummary[ScorecardProfilePath],
+        perf: QAIHMModelPerf,
+        include_failures: bool = False,
+    ) -> None:
         """Add the profile job for this export test to the given QAIHMModelPerf object."""
         params = self.params
         assert params.precision is not None
-        assert isinstance(params.path, ScorecardProfilePath)
         assert params.device is not None
 
         if not include_failures and (
@@ -169,12 +176,12 @@ class ScorecardExportTestSummary:
     A "single export test" is equal to a user running the export script (one model + runtime + precision + device).
     """
 
-    params: ScExportTestParams
-    job_summaries: list[ScorecardJobSummary]
+    params: ScExportTestParams[ScorecardProfilePath]
+    job_summaries: list[ScorecardJobSummary[ScorecardProfilePath]]
 
     @staticmethod
     def from_params(
-        params: ScExportTestParams,
+        params: ScExportTestParams[ScorecardProfilePath],
         pre_qdq_jobs: PreQDQCompileScorecardJobYaml | None,
         quantize_jobs: QuantizeScorecardJobYaml | None,
         compile_jobs: CompileScorecardJobYaml | None,

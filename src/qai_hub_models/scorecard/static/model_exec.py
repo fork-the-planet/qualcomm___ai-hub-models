@@ -28,7 +28,6 @@ from qai_hub_models.scorecard.execution_helpers import ScorecardPathTypeVar
 from qai_hub_models.scorecard.params import ScExportTestParams, ScJobParams
 from qai_hub_models.scorecard.path_compile import ScorecardCompilePath
 from qai_hub_models.scorecard.path_profile import ScorecardProfilePath
-from qai_hub_models.scorecard.results.scorecard_job import ProfileScorecardJob
 from qai_hub_models.scorecard.results.yaml import (
     CompileScorecardJobYaml,
     InferenceScorecardJobYaml,
@@ -145,8 +144,8 @@ def for_each_static_model_test_parameterization(
             callback(
                 ScJobParams(
                     model_id,
-                    precision,
                     sc_path,
+                    precision,
                     device,
                 )
             )
@@ -168,10 +167,10 @@ def get_static_model_test_parameterizations(
         tuple[Precision, ScorecardPathTypeVar, ScorecardDevice]
     ] = []
 
-    def collect_parameterization(params: ScJobParams) -> None:
+    def collect_parameterization(params: ScJobParams[ScorecardPathTypeVar]) -> None:
         assert params.path is not None
         assert params.device is not None
-        parameterizations.append((precision, params.path, params.device))  # type: ignore[arg-type]
+        parameterizations.append((precision, params.path, params.device))
 
     for_each_static_model_test_parameterization(
         model_id,
@@ -316,8 +315,7 @@ def profile_model(
                 params.model_id, params.path, params.precision, params.device
             ),
         ):
-            sc_job = cast(ProfileScorecardJob, prev_profile_job)
-            job = sc_job.job
+            job = cast(ProfileJob, prev_profile_job)
             _print_if_not_verbose(
                 hub,
                 f"{job_name} | The compiled asset from the previous scorecard is identical. Copying over previous profile job {job.job_id} | {job.url}",
