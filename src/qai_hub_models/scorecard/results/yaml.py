@@ -95,6 +95,7 @@ class ScorecardJobYaml(ScorecardYamlFile[str], Generic[ScorecardJobTypeVar]):
     def to_file(self, path: str | Path | None = None, append: bool = False) -> None:
         path = path or self.path
         assert path is not None
+        Path(path).parent.mkdir(parents=True, exist_ok=True)
         if len(self.mapping) > 0:
             with open(path, "a" if append else "w") as yaml_file:
                 ruamel.yaml.YAML().dump(self.mapping, yaml_file)
