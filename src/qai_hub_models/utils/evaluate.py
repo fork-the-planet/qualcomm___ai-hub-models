@@ -54,6 +54,7 @@ from qai_hub_models.utils.input_spec import InputSpec
 from qai_hub_models.utils.onnx.helpers import extract_io_types_from_onnx_model
 from qai_hub_models.utils.onnx.torch_wrapper import (
     OnnxModelTorchWrapper,
+    OnnxSessionOptions,
     OnnxSessionTorchWrapper,
 )
 from qai_hub_models.utils.private_asset_loaders import UnfetchableDatasetError
@@ -244,7 +245,15 @@ def _load_quant_cpu_onnx(model: hub.Model) -> OnnxModelTorchWrapper:
     local_dir.mkdir(parents=True, exist_ok=True)
     local_path = local_dir / f"{qdq_model.model_id}"
     output_path = qdq_model.download(str(local_path))
-    return OnnxModelTorchWrapper.OnCPU(output_path)
+
+    # Disable all graph optimizations to preserve the original quantized model structure as much as possible.
+    # This is to workaround a bug in ONNXRT that causes an accuracy drop due to unsafe opt passes on quantized models
+    options = OnnxSessionOptions()
+    options.graph_optimization_level = (
+        onnxruntime.GraphOptimizationLevel.ORT_DISABLE_ALL
+    )
+
+    return OnnxModelTorchWrapper.OnCPU(output_path, session_options=options)
 
 
 def _validate_dataset_ids_path(path: Path) -> bool:
