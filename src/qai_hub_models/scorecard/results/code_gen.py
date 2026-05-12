@@ -65,7 +65,7 @@ def _clean_old_failure_reasons(
 
         # Delete precisions that are no longer valid
         if precision not in code_gen_config.supported_precisions:
-            for runtime, reasons in reasons_by_runtime.items():
+            for runtime, reasons in list(reasons_by_runtime.items()):
                 if clean_general:
                     reasons.scorecard_failure = None
                 if clean_accuracy:
