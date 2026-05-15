@@ -1,12 +1,6 @@
 supported_precisions:
-- mixed_with_float
 - float
-disabled_paths:
-  mixed_with_float:
-    voice_ai:
-      scorecard_failure: 'Failing jobs: jpe4w7v85'
-    qnn_dlc:
-      scorecard_failure: 'Failing jobs: j5mv6d1w5'
+disabled_paths: {}
 is_collection_model: true
 requires_aot_prepare: true
 orchestrator_runtimes:

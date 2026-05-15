@@ -150,10 +150,6 @@ class Encoder(BaseModel):
             compile_options += " --truncate_64bit_tensors --truncate_64bit_io "
         return compile_options
 
-    @staticmethod
-    def component_precision() -> Precision:
-        return Precision.float
-
 
 class SDP(BaseModel):
     """Wrapper for the Piper encoder and duration predictor with deterministic behavior."""
@@ -265,10 +261,6 @@ class SDP(BaseModel):
             context_graph_name="sdp",
         )
 
-    @staticmethod
-    def component_precision() -> Precision:
-        return Precision.w8a16
-
 
 class Flow(BaseModel):
     def __init__(self, gen: SynthesizerTrn) -> None:
@@ -355,11 +347,6 @@ class Flow(BaseModel):
             context_graph_name="flow",
         )
 
-    @staticmethod
-    def component_precision() -> Precision:
-        # If w8a16, the audio will be noisy and noise intensity is proportional to the number of calibration samples.
-        return Precision.float
-
 
 class Decoder(BaseModel):
     def __init__(self, gen: SynthesizerTrn) -> None:
@@ -415,10 +402,6 @@ class Decoder(BaseModel):
             device,
             context_graph_name="decoder",
         )
-
-    @staticmethod
-    def component_precision() -> Precision:
-        return Precision.w8a16
 
 
 class PiperTTS(PretrainedCollectionModel):

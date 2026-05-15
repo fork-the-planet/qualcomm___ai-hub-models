@@ -40,7 +40,7 @@ Navigate to [docs](https://workbench.aihub.qualcomm.com/docs/) for more informat
 Run the following simple CLI demo to verify the model is working end to end:
 
 ```bash
-python -m qai_hub_models.models.pipertts_de.demo { --quantize mixed_with_float }
+python -m qai_hub_models.models.pipertts_de.demo
 ```
 More details on the CLI tool can be found with the `--help` option. See
 [demo.py](demo.py) for sample usage of the model including pre/post processing
@@ -51,7 +51,7 @@ models](../../../#getting-started) for more usage instructions.
 To run the model on Qualcomm® devices, you must export the model for use with an edge runtime such as
 TensorFlow Lite, ONNX Runtime, or Qualcomm AI Engine Direct. Use the following command to export the model:
 ```bash
-python -m qai_hub_models.models.pipertts_de.export --device "Samsung Galaxy S25 (Family)" { --quantize mixed_with_float }
+python -m qai_hub_models.models.pipertts_de.export --device "Samsung Galaxy S25 (Family)"
 ```
 Additional options are documented with the `--help` option.
 

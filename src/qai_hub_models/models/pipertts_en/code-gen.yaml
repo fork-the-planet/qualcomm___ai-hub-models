@@ -1,5 +1,4 @@
 supported_precisions:
-- mixed_with_float
 - float
 disabled_paths: {}
 is_collection_model: true

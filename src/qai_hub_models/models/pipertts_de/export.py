@@ -314,7 +314,7 @@ def download_model(
 def export_model(
     device: hub.Device,
     components: list[str] | None = None,
-    precision: Precision = Precision.mixed_with_float,
+    precision: Precision = Precision.float,
     num_calibration_samples: int | None = None,
     quantized_model_id: dict[str, str] | None = None,
     skip_compiling: bool = False,
@@ -631,9 +631,6 @@ def main() -> None:
     if not check_unpublished_model_warning():
         return
     supported_precision_runtimes: dict[Precision, list[TargetRuntime]] = {
-        Precision.mixed_with_float: [
-            TargetRuntime.VOICE_AI,
-        ],
         Precision.float: [
             TargetRuntime.VOICE_AI,
         ],

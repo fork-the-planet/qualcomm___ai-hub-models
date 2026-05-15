@@ -63,9 +63,6 @@ from qai_hub_models.utils.validation import perform_runtime_model_validation
 #   Certain supported pairs may be excluded from this list if they are not enabled for testing.
 #   For example, models that allow JIT (on-device) compile will not test AOT runtimes; we assume that if it works on JIT it will work on AOT.
 ENABLED_PRECISION_RUNTIMES: dict[Precision, list[TargetRuntime]] = {
-    Precision.mixed_with_float: [
-        TargetRuntime.VOICE_AI,
-    ],
     Precision.float: [
         TargetRuntime.VOICE_AI,
     ],
