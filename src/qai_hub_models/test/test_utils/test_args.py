@@ -5,6 +5,8 @@
 from __future__ import annotations
 
 import argparse
+import importlib.abc
+import importlib.machinery
 import sys
 import types
 from unittest.mock import MagicMock, create_autospec, patch
@@ -51,29 +53,33 @@ class DynamicMockModule(types.ModuleType):
         return MagicMock()
 
 
-class _MockFinder:
+class _MockFinder(importlib.abc.MetaPathFinder):
     """Meta-path finder that intercepts imports of specified packages."""
 
     def __init__(self, prefixes: list[str]) -> None:
         self._prefixes = prefixes
 
-    def find_module(self, fullname: str, path: object = None) -> _MockFinder | None:
+    def find_spec(
+        self,
+        fullname: str,
+        path: object = None,
+        target: object = None,
+    ) -> importlib.machinery.ModuleSpec | None:
         for prefix in self._prefixes:
             if fullname == prefix or fullname.startswith(prefix + "."):
-                return self
+                return importlib.machinery.ModuleSpec(fullname, self)  # type: ignore[arg-type]
         return None
 
-    def load_module(self, fullname: str) -> DynamicMockModule:
-        if fullname in sys.modules:
-            return sys.modules[fullname]  # type: ignore[return-value]
-        mod = DynamicMockModule(fullname)
-        sys.modules[fullname] = mod
-        return mod
+    def create_module(self, spec: importlib.machinery.ModuleSpec) -> DynamicMockModule:
+        return DynamicMockModule(spec.name)
+
+    def exec_module(self, module: types.ModuleType) -> None:
+        pass
 
 
 _MOCK_PACKAGES = ["sounddevice", "geffnet", "timm", "transformers", "matplotlib"]
 _finder = _MockFinder(_MOCK_PACKAGES)
-sys.meta_path.insert(0, _finder)  # type: ignore[arg-type]
+sys.meta_path.insert(0, _finder)
 
 
 def test_parse_resnet18_export() -> None:

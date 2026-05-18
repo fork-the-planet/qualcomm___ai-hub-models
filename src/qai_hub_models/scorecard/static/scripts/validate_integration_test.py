@@ -174,12 +174,16 @@ def main() -> None:
     try:
         scorecard_df = pd.read_csv(ScorecardArtifact.EXPORT_CSV.path)
         results_df = pd.read_csv(ScorecardArtifact.RESULTS_CSV.path)
-        accuracy_df = pd.read_csv(ScorecardArtifact.ACCURACY_CSV.path)
 
         errors = []
         errors.extend(validate_results_df(results_df))
         errors.extend(validate_scorecard_df(scorecard_df))
-        errors.extend(validate_accuracy_df(accuracy_df))
+
+        if ScorecardArtifact.ACCURACY_CSV.exists():
+            accuracy_df = pd.read_csv(ScorecardArtifact.ACCURACY_CSV.path)
+            errors.extend(validate_accuracy_df(accuracy_df))
+        else:
+            errors.append("accuracy.csv not found — accuracy tests may have failed.")
 
         if errors:
             raise ValueError(  # noqa: TRY301
