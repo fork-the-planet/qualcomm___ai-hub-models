@@ -315,6 +315,7 @@ and many more.
 | [OpusMT-En-Zh](https://aihub.qualcomm.com/models/opus_mt_en_zh) | `qai_hub_models.models.opus_mt_en_zh` |
 | [OpusMT-Es-En](https://aihub.qualcomm.com/models/opus_mt_es_en) | `qai_hub_models.models.opus_mt_es_en` |
 | [OpusMT-Zh-En](https://aihub.qualcomm.com/models/opus_mt_zh_en) | `qai_hub_models.models.opus_mt_zh_en` |
+| [Pi0.5](https://aihub.qualcomm.com/models/pi05) | `qai_hub_models.models.pi05` |
 | [TrOCR](https://aihub.qualcomm.com/models/trocr) | `qai_hub_models.models.trocr` |
 
 ### Audio

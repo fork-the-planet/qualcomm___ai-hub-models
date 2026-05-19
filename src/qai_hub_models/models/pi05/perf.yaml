@@ -1,0 +1,71 @@
+supported_devices:
+- Dragonwing IQ-9075 EVK
+supported_chipsets:
+- qualcomm-qcs9075
+precisions:
+  mixed:
+    components:
+      vision_encoder:
+        performance_metrics:
+          Dragonwing IQ-9075 EVK:
+            qnn_context_binary:
+              job_id: jgd7633rg
+              job_status: Passed
+              inference_time_milliseconds: 40.566
+              estimated_peak_memory_range_mb:
+                min: 1
+                max: 5
+              primary_compute_unit: NPU
+              layer_counts:
+                total: 1120
+                npu: 1120
+              tool_versions:
+                qairt: 2.45.0.260326154327
+      token_emb:
+        performance_metrics:
+          Dragonwing IQ-9075 EVK:
+            qnn_context_binary:
+              job_id: j57vo44v5
+              job_status: Passed
+              inference_time_milliseconds: 4.221
+              estimated_peak_memory_range_mb:
+                min: 6
+                max: 26
+              primary_compute_unit: NPU
+              layer_counts:
+                total: 34
+                npu: 34
+              tool_versions:
+                qairt: 2.45.0.260326154327
+      action_expert:
+        performance_metrics:
+          Dragonwing IQ-9075 EVK:
+            qnn_context_binary:
+              job_id: jp4je118p
+              job_status: Passed
+              inference_time_milliseconds: 30.99
+              estimated_peak_memory_range_mb:
+                min: 34
+                max: 70
+              primary_compute_unit: NPU
+              layer_counts:
+                total: 3835
+                npu: 3835
+              tool_versions:
+                qairt: 2.45.0.260326154327
+      backbone:
+        performance_metrics:
+          Dragonwing IQ-9075 EVK:
+            qnn_context_binary:
+              job_id: jpxe04435
+              job_status: Passed
+              inference_time_milliseconds: 398.479
+              estimated_peak_memory_range_mb:
+                min: 12
+                max: 60
+              primary_compute_unit: NPU
+              layer_counts:
+                total: 2473
+                npu: 2473
+              tool_versions:
+                qairt: 2.45.0.260326154327

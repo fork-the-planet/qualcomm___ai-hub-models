@@ -3064,3 +3064,7 @@ yolox_TFLITE: jp1qwnl2g
 yolox_QNN_DLC: jgd7qd9eg
 yolox_QNN_DLC_VIA_QNN_EP: j5wm3lv3g
 yolox_ONNX: jg99yz1wg
+pi05_mixed_QNN_CONTEXT_BINARY-cs_9075_vision_encoder: jpvz27lrg
+pi05_mixed_QNN_CONTEXT_BINARY-cs_9075_token_emb: jpvz27yzg
+pi05_mixed_QNN_CONTEXT_BINARY-cs_9075_action_expert: jgzvznq4p
+pi05_mixed_QNN_CONTEXT_BINARY-cs_9075_backbone: jpr1xwzkg

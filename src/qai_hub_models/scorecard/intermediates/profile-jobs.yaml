@@ -10374,3 +10374,7 @@ yolox_ONNX-cs_x_elite: jp3qn18z5
 yolox_ONNX-cs_x2_elite: jpvzqr4mg
 yolox_ONNX-cs_8550: jp1q2w3lg
 yolox_ONNX-cs_9075: j5wmw386g
+pi05_mixed_QNN_CONTEXT_BINARY-cs_9075_vision_encoder: jgd7633rg
+pi05_mixed_QNN_CONTEXT_BINARY-cs_9075_token_emb: j57vo44v5
+pi05_mixed_QNN_CONTEXT_BINARY-cs_9075_action_expert: jp4je118p
+pi05_mixed_QNN_CONTEXT_BINARY-cs_9075_backbone: jpxe04435

@@ -147,3 +147,8 @@ whisper_small:
 whisper_tiny:
 - encoder
 - decoder
+pi05:
+- vision_encoder
+- token_emb
+- action_expert
+- backbone

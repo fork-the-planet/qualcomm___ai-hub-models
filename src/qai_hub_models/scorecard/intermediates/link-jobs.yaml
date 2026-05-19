@@ -1024,3 +1024,7 @@ zipformer_QNN_CONTEXT_BINARY-cs_9075_joiner: jg99yq0wg
 zipformer_QNN_CONTEXT_BINARY-cs_xr_8450_encoder: j57vl82v5
 zipformer_QNN_CONTEXT_BINARY-cs_xr_8450_decoder: j5mv6led5
 zipformer_QNN_CONTEXT_BINARY-cs_xr_8450_joiner: jpr12760g
+pi05_mixed_QNN_CONTEXT_BINARY-cs_9075_vision_encoder: jgnr1ner5
+pi05_mixed_QNN_CONTEXT_BINARY-cs_9075_token_emb: jpr1x0y9g
+pi05_mixed_QNN_CONTEXT_BINARY-cs_9075_action_expert: jp23owm4g
+pi05_mixed_QNN_CONTEXT_BINARY-cs_9075_backbone: jp0eojr65

@@ -1,6 +1,6 @@
 name: Pi0.5
 id: pi05
-status: pending
+status: published
 headline: State-of-the-art generalist robotic foundation model trained on vision, language, and action to enable dexterous, zero-shot physical task execution across diverse robot platforms.
 domain: Multimodal
 description: Pi0.5 is a vision-language-action model that co-trains on diverse data sources (robot demos, web data, semantic subtasks) to enable open-world generalization for long-horizon robotic manipulation.

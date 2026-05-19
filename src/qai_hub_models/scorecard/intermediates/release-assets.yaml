@@ -6477,3 +6477,12 @@ models:
               tool_versions:
                 qairt: 2.42.0.251225135753_193295
                 onnx_runtime: 1.24.3
+  pi05:
+    precisions:
+      mixed:
+        chipset_assets:
+          qualcomm-qcs9075:
+            qnn_context_binary:
+              s3_key: pre_release_assets/manual/2026-05-18/pi05-qnn_context_binary-mixed-qualcomm_qcs9075.zip
+              tool_versions:
+                qairt: 2.45.0.260326154327
