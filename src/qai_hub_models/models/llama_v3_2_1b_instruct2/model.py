@@ -323,7 +323,7 @@ class Llama3_2_1B_QuantizablePreSplit(  # type: ignore[misc]
 # ---------------------------------------------------------------------------
 
 
-class Llama3_2_1B_PartBase(MultiGraphWorkbenchModel):
+class Llama3_2_1B_PartBase(torch.nn.Module, MultiGraphWorkbenchModel):
     """
     Unified Part base: handles both FP and Quantizable modes based on precision.
 

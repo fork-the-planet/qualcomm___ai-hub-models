@@ -865,7 +865,7 @@ class Qwen2_5_VL_7B_VisionEncoder(Qwen2VLVisionEncoder):
 # ---------------------------------------------------------------------------
 
 
-class Qwen2_5_VL_7B_PartBase(MultiGraphWorkbenchModel):
+class Qwen2_5_VL_7B_PartBase(torch.nn.Module, MultiGraphWorkbenchModel):
     """
     Unified Part base: handles both FP and Quantizable modes based on precision.
 
