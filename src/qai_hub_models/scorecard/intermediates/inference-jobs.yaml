@@ -1042,10 +1042,6 @@ stereonet_TFLITE-cs_8_elite: j56qn230g
 stereonet_QNN_DLC-cs_8_elite: jpvzvq1jg
 stereonet_QNN_DLC_VIA_QNN_EP-cs_8_elite: jpe4kor15
 stereonet_ONNX-cs_8_elite: jg99w09lg
-superpoint_TFLITE-cs_8_elite: jp3qenrn5
-superpoint_QNN_DLC-cs_8_elite: jgoe3z9kp
-superpoint_QNN_DLC_VIA_QNN_EP-cs_8_elite: jpe4konv5
-superpoint_ONNX-cs_8_elite: jp4jvn22p
 swin_base_TFLITE-cs_8_elite: jpr1e8zkg
 swin_base_QNN_DLC-cs_8_elite: jpyv6r90p
 swin_base_QNN_DLC_VIA_QNN_EP-cs_8_elite: jp0el3y05

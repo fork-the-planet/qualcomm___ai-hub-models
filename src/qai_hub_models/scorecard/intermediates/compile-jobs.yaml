@@ -2470,10 +2470,6 @@ stereonet_TFLITE: j5mv69kq5
 stereonet_QNN_DLC: jpr12xdeg
 stereonet_QNN_DLC_VIA_QNN_EP: jpyvj824p
 stereonet_ONNX: jgkrq60o5
-superpoint_TFLITE: jgoendwdp
-superpoint_QNN_DLC: jpvzr2mmg
-superpoint_QNN_DLC_VIA_QNN_EP: jgjk23y85
-superpoint_ONNX: jpe4w6x05
 swin_base_TFLITE: jp4jde2lp
 swin_base_QNN_DLC: j5mv69lq5
 swin_base_QNN_DLC_VIA_QNN_EP: jgnrm1wm5

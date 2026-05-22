@@ -20,8 +20,8 @@ related_models:
 form_factors:
 - Phone
 - IoT
-has_static_banner: false
-has_animated_banner: false
+has_static_banner: true
+has_animated_banner: true
 dataset:
   - DOTA128
 technical_details:

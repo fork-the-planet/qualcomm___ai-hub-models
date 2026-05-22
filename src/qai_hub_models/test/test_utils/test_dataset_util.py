@@ -55,7 +55,6 @@ def test_dataset_entries_length_mismatch() -> None:
         ("ADESegmentationDataset", "ade_segmentation"),
         ("VOCSegmentationDataset", "voc_segmentation"),
         ("TinyMMLU", "tiny_mmlu"),
-        ("HPatchesDataset", "h_patches"),
         ("Coco91ClassDataset", "coco91_class"),
         ("NYUV2Dataset", "nyuv2"),
         ("EG1800SegmentationDataset", "eg1800_segmentation"),

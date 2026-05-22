@@ -1,7 +1,0 @@
-has_on_target_demo: true
-disabled_paths:
-  float:
-    qnn_dlc:
-      scorecard_accuracy_failure: 'Device accuracy (89.0 correctness@3px) deviates from benchmark (83.3 correctness@3px) by 5.700 correctness@3px, threshold: 5.0 correctness@3px'
-    tflite:
-      scorecard_accuracy_failure: 'Device accuracy (88.5 correctness@3px) deviates from benchmark (83.3 correctness@3px) by 5.200 correctness@3px, threshold: 5.0 correctness@3px'
