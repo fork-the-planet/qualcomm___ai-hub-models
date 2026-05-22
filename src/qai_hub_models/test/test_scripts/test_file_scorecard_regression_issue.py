@@ -115,7 +115,7 @@ def test_main_writes_output(tmp_path: Path) -> None:
 
     assert output_file.exists()
     issue = json.loads(output_file.read_text())
-    assert "[Scorecard]" in issue["title"]
+    assert "[Scorecard - Prod]" in issue["title"]
     assert "resnet50" in issue["body"]
     assert "yolov8_det" in issue["body"]
-    assert issue["labels"] == ["p1", "ai-hub-models"]
+    assert issue["labels"] == ["p1", "scorecard"]

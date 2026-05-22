@@ -168,7 +168,8 @@ def main() -> None:
         return
 
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    title = f"[Scorecard] 2x+ Regressions Detected - {today}"
+    env_label = "Prod" if args.deployment == "workbench" else "Dev"
+    title = f"[Scorecard - {env_label}] 2x+ Regressions Detected - {today}"
 
     body = build_issue_body(
         perf_regressions,
@@ -186,7 +187,7 @@ def main() -> None:
         f"{numerics_count} numerics regression(s)."
     )
 
-    output = {"title": title, "body": body, "labels": ["p1", "ai-hub-models"]}
+    output = {"title": title, "body": body, "labels": ["p1", "scorecard"]}
     with open(args.output, "w") as f:
         json.dump(output, f, indent=2)
     print(f"Issue JSON written to {args.output}")
