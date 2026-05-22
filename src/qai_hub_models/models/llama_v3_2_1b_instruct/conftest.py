@@ -2,20 +2,29 @@
 # Copyright (c) 2025 Qualcomm Technologies, Inc. and/or its subsidiaries.
 # SPDX-License-Identifier: BSD-3-Clause
 # ---------------------------------------------------------------------
-from __future__ import annotations
+# THIS FILE WAS AUTO-GENERATED. DO NOT EDIT MANUALLY.
 
 import gc
 import inspect
+import warnings
 from collections.abc import Generator
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 import pytest
+import torch.jit._trace
 
 from qai_hub_models.models.llama_v3_2_1b_instruct import Model
 
-if TYPE_CHECKING:
-    from qai_hub_models.models._shared.llm.perf_collection import LLMPerfConfig
-    from qai_hub_models.models._shared.llm.test import CompileJobCache
+
+def pytest_configure(config: pytest.Config) -> None:
+    # pytest is unable to figure out how to silence several PyTorch warning types from pyproject.toml settings,
+    # so we apply a manual warning filter here instead.
+    warnings.filterwarnings(action="ignore", category=torch.jit._trace.TracerWarning)
+    warnings.filterwarnings(action="ignore", category=UserWarning, module="torch.*")
+    warnings.filterwarnings(action="ignore", category=FutureWarning, module="torch.*")
+    warnings.filterwarnings(
+        action="ignore", category=DeprecationWarning, module="torch.*"
+    )
 
 
 # Instantiate the model only once for all tests.
@@ -46,17 +55,3 @@ def cached_from_pretrained() -> Generator[pytest.MonkeyPatch, None, None]:
 @pytest.fixture(scope="module", autouse=True)
 def ensure_gc() -> None:
     gc.collect()
-
-
-@pytest.fixture(scope="session")
-def llm_perf_config() -> LLMPerfConfig:
-    from qai_hub_models.models._shared.llm.perf_collection import LLMPerfConfig
-
-    return LLMPerfConfig.from_environment()
-
-
-@pytest.fixture(scope="session")
-def compile_job_cache() -> CompileJobCache:
-    from qai_hub_models.models._shared.llm.test import CompileJobCache
-
-    return CompileJobCache()

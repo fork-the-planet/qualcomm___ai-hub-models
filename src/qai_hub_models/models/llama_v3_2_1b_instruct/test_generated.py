@@ -15,10 +15,10 @@ import qai_hub as hub
 import torch
 from qai_hub.client import SourceModel
 
-import qai_hub_models.models.llama_v3_2_1b_instruct2 as _model_module
+import qai_hub_models.models.llama_v3_2_1b_instruct as _model_module
 from qai_hub_models.common import Precision, TargetRuntime
-from qai_hub_models.models.llama_v3_2_1b_instruct2 import MODEL_ID, Model
-from qai_hub_models.models.llama_v3_2_1b_instruct2.export import (
+from qai_hub_models.models.llama_v3_2_1b_instruct import MODEL_ID, Model
+from qai_hub_models.models.llama_v3_2_1b_instruct.export import (
     compile_model,
     export_model,
     link_model,

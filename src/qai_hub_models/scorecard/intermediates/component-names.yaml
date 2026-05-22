@@ -20,7 +20,7 @@ easyocr:
 edgetam:
 - encoder
 - decoder
-llama_v3_2_1b_instruct2:
+llama_v3_2_1b_instruct:
 - llama3_2_1b_part1_of_3
 - llama3_2_1b_part2_of_3
 - llama3_2_1b_part3_of_3

@@ -11,39 +11,37 @@ from typing import Any
 
 import numpy as np
 import pytest
-import qai_hub as hub
 import torch
 from transformers import AutoConfig
 
 from qai_hub_models import Precision, TargetRuntime
+from qai_hub_models.configs.model_metadata import ModelMetadata
 from qai_hub_models.models._shared.llm import test
-from qai_hub_models.models._shared.llm.common import cleanup
 from qai_hub_models.models._shared.llm.evaluate import evaluate
-from qai_hub_models.models._shared.llm.export import export_model
-from qai_hub_models.models._shared.llm.model import DEFAULT_CONTEXT_LENGTH
+from qai_hub_models.models._shared.llm.model import (
+    DEFAULT_CONTEXT_LENGTH,
+    DEFAULT_SEQUENCE_LENGTH,
+    LLM_QNN,
+)
 from qai_hub_models.models._shared.llm.perf_collection import (
     LLMPerfConfig,
     get_llm_perf_parametrization,
 )
 from qai_hub_models.models._shared.llm.test import CompileJobCache
-from qai_hub_models.models.llama_v3_2_1b_instruct import (
-    MODEL_ID,
-    FP_Model,
-    Model,
-    PositionProcessor,
-    QNN_Model,
-)
+from qai_hub_models.models.llama_v3_2_1b_instruct import Model
 from qai_hub_models.models.llama_v3_2_1b_instruct.demo import llama_3_2_1b_chat_demo
-from qai_hub_models.models.llama_v3_2_1b_instruct.export import DEFAULT_EXPORT_DEVICE
-from qai_hub_models.models.llama_v3_2_1b_instruct.export import main as export_main
+from qai_hub_models.models.llama_v3_2_1b_instruct.export import (
+    export_model,
+)
 from qai_hub_models.models.llama_v3_2_1b_instruct.model import (
-    DEFAULT_EXPORT_CONTEXT_LENGTHS,
-    DEFAULT_EXPORT_SEQUENCE_LENGTHS,
-    DEFAULT_PRECISION,
     HF_REPO_NAME,
     MODEL_ASSET_VERSION,
-    NUM_LAYERS_PER_SPLIT,
+    MODEL_ID,
     NUM_SPLITS,
+    FPSplitModelWrapper,
+    Llama3_2_1B_PreSplit,
+    Llama3_2_1B_QuantizablePreSplit,
+    QuantizedSplitModelWrapper,
 )
 from qai_hub_models.scorecard import (
     ScorecardCompilePath,
@@ -53,17 +51,16 @@ from qai_hub_models.scorecard.device import cs_8_elite_qrd, cs_x_elite
 from qai_hub_models.scorecard.utils.testing_export_eval import run_llm_compile
 from qai_hub_models.utils.asset_loaders import ASSET_CONFIG
 from qai_hub_models.utils.checkpoint import CheckpointSpec
+from qai_hub_models.utils.export_result import MultiGraphCollectionExportResult
 from qai_hub_models.utils.llm_helpers import (
     create_genie_config,
     log_evaluate_test_result,
     log_perf_on_device_result,
 )
-from qai_hub_models.utils.model_cache import CacheMode
 
 DEFAULT_EVAL_SEQLEN = 2048
 
 
-@pytest.mark.nightly
 @pytest.mark.unmarked
 def test_create_genie_config() -> None:
     context_length = 1024
@@ -134,128 +131,15 @@ def test_create_genie_config() -> None:
     assert expected_config == actual_config
 
 
-@pytest.mark.nightly
-@pytest.mark.unmarked
-@pytest.mark.parametrize(
-    ("skip_inferencing", "skip_profiling", "target_runtime"),
-    [
-        (True, True, TargetRuntime.GENIE),
-        (True, False, TargetRuntime.GENIE),
-        (False, True, TargetRuntime.GENIE),
-        (False, False, TargetRuntime.GENIE),
-    ],
-)
-def test_cli_device_with_skips(
-    tmp_path: Path,
-    skip_inferencing: bool,
-    skip_profiling: bool,
-    target_runtime: TargetRuntime,
-) -> None:
-    test.test_cli_device_with_skips(
-        export_main,
-        Model,
-        tmp_path,
-        MODEL_ID,
-        NUM_SPLITS,
-        hub.Device(DEFAULT_EXPORT_DEVICE),
-        skip_inferencing,
-        skip_profiling,
-        target_runtime,
-        precision=DEFAULT_PRECISION,
-    )
-
-
-@pytest.mark.nightly
-@pytest.mark.unmarked
-@pytest.mark.parametrize(
-    ("chipset", "context_length", "sequence_length", "target_runtime"),
-    [
-        ("qualcomm-snapdragon-8gen2", 2048, 256, TargetRuntime.GENIE),
-        ("qualcomm-snapdragon-x-elite", 4096, 128, TargetRuntime.GENIE),
-    ],
-)
-def test_cli_chipset_with_options(
-    tmp_path: Path,
-    context_length: int,
-    sequence_length: int,
-    chipset: str,
-    target_runtime: TargetRuntime,
-) -> None:
-    test.test_cli_chipset_with_options(
-        export_main,
-        Model,
-        tmp_path,
-        MODEL_ID,
-        NUM_SPLITS,
-        chipset,
-        context_length,
-        sequence_length,
-        target_runtime,
-        precision=Precision.w4,
-    )
-
-
-@pytest.mark.nightly
-@pytest.mark.unmarked
-@pytest.mark.parametrize(
-    "target_runtime",
-    [TargetRuntime.GENIE],
-)
-def test_cli_multiple_context_lengths_link_jobs(
-    tmp_path: Path,
-    target_runtime: TargetRuntime,
-) -> None:
-    test.test_cli_multiple_context_lengths_link_jobs(
-        export_main,
-        Model,
-        tmp_path,
-        MODEL_ID,
-        NUM_SPLITS,
-        hub.Device(DEFAULT_EXPORT_DEVICE),
-        target_runtime,
-        precision=DEFAULT_PRECISION,
-    )
-
-
-@pytest.mark.nightly
-@pytest.mark.unmarked
-@pytest.mark.parametrize(
-    ("cache_mode", "skip_download", "skip_summary", "target_runtime"),
-    [
-        (CacheMode.ENABLE, True, True, TargetRuntime.GENIE),
-        (CacheMode.DISABLE, True, False, TargetRuntime.GENIE),
-        (CacheMode.OVERWRITE, False, False, TargetRuntime.GENIE),
-    ],
-)
-def test_cli_default_device_select_component(
-    tmp_path: Path,
-    cache_mode: CacheMode,
-    skip_download: bool,
-    skip_summary: bool,
-    target_runtime: TargetRuntime,
-) -> None:
-    test.test_cli_default_device_select_component(
-        export_main,
-        Model,
-        tmp_path,
-        MODEL_ID,
-        NUM_SPLITS,
-        hub.Device(DEFAULT_EXPORT_DEVICE),
-        cache_mode,
-        skip_download,
-        skip_summary,
-        target_runtime,
-        decode_sequence_length=1,
-        precision=DEFAULT_PRECISION,
-    )
-
-
 # Full model tests
 @pytest.mark.evaluate
 @pytest.mark.parametrize("checkpoint", ["DEFAULT", "DEFAULT_W4A16"])
 def test_load_encodings_to_quantsim(checkpoint: str) -> None:
-    cleanup()
-    Model.from_pretrained(fp_model=FP_Model.from_pretrained())
+    Llama3_2_1B_PreSplit.clear_cache()
+    Llama3_2_1B_QuantizablePreSplit.clear_cache()
+    FPSplitModelWrapper.clear_cache()
+    QuantizedSplitModelWrapper.clear_cache()
+    Model.from_pretrained()
 
 
 @pytest.mark.evaluate
@@ -265,11 +149,11 @@ def test_load_encodings_to_quantsim(checkpoint: str) -> None:
 @pytest.mark.parametrize(
     ("checkpoint", "task", "expected_metric", "num_samples"),
     [
-        pytest.param("DEFAULT_W4", "wikitext", 16.78, 0, marks=pytest.mark.nightly),
+        pytest.param("DEFAULT_W4", "wikitext", 16.79, 0, marks=pytest.mark.nightly),
         ("DEFAULT_W4", "mmlu", 0.399, 1000),
         ("DEFAULT_W4", "tiny_mmlu", 0.43, 0),
-        pytest.param("DEFAULT_W4A16", "wikitext", 17.43, 0, marks=pytest.mark.nightly),
-        ("DEFAULT_W4A16", "mmlu", 0.403, 1000),
+        pytest.param("DEFAULT_W4A16", "wikitext", 17.47, 0, marks=pytest.mark.nightly),
+        ("DEFAULT_W4A16", "mmlu", 0.390, 1000),
         ("DEFAULT_UNQUANTIZED", "wikitext", 12.18, 0),
         ("DEFAULT_UNQUANTIZED", "mmlu", 0.482, 1000),
         ("DEFAULT_UNQUANTIZED", "tiny_mmlu", 0.41, 0),
@@ -282,17 +166,22 @@ def test_evaluate(
     num_samples: int,
 ) -> None:
     dataset_cls = next(
-        d for d in FP_Model.get_eval_dataset_classes() if d.dataset_name() == task
+        d
+        for d in FPSplitModelWrapper.get_eval_dataset_classes()
+        if d.dataset_name() == task
     )
-    cleanup()
+    Llama3_2_1B_PreSplit.clear_cache()
+    Llama3_2_1B_QuantizablePreSplit.clear_cache()
+    FPSplitModelWrapper.clear_cache()
+    QuantizedSplitModelWrapper.clear_cache()
     is_unquantized = checkpoint == "DEFAULT_UNQUANTIZED"
     extra_kwargs = (
         {"_skip_quantsim_creation": False, "fp_model": None} if is_unquantized else {}
     )
     actual_metric, _ = evaluate(
-        quantized_model_cls=Model,
-        fp_model_cls=FP_Model,
-        qnn_model_cls=QNN_Model,
+        quantized_model_cls=QuantizedSplitModelWrapper,
+        fp_model_cls=FPSplitModelWrapper,
+        qnn_model_cls=LLM_QNN,
         num_samples=num_samples,
         dataset_cls=dataset_cls,
         skip_fp_model_eval=not is_unquantized,
@@ -317,28 +206,32 @@ def test_evaluate(
 @pytest.mark.skipif(
     not torch.cuda.is_available(), reason="This test can be run on GPU only."
 )
-def test_quantize_and_demo(
-    tmp_path: Path,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
+def test_quantize_and_demo(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     """Quantize the model and verify it can respond with 'Paris'."""
-    cleanup()
+    Llama3_2_1B_PreSplit.clear_cache()
+    Llama3_2_1B_QuantizablePreSplit.clear_cache()
+    FPSplitModelWrapper.clear_cache()
+    QuantizedSplitModelWrapper.clear_cache()
     checkpoint_path = test.setup_test_quantization(
-        Model,
-        FP_Model,
+        QuantizedSplitModelWrapper,
+        FPSplitModelWrapper,
         str(tmp_path),
         precision=Precision.w4a16,
-        checkpoint=HF_REPO_NAME,
+        checkpoint="DEFAULT",
         use_seq_mse=False,
+        use_dynamic_shapes=True,
     )
     llama_3_2_1b_chat_demo(
-        fp_model_cls=FP_Model,
+        fp_model_cls=FPSplitModelWrapper,
         default_prompt="What is the capital of France?",
         test_checkpoint=checkpoint_path,
     )
     captured = capsys.readouterr()
     assert "Paris" in captured.out
-    cleanup()
+    Llama3_2_1B_PreSplit.clear_cache()
+    Llama3_2_1B_QuantizablePreSplit.clear_cache()
+    FPSplitModelWrapper.clear_cache()
+    QuantizedSplitModelWrapper.clear_cache()
 
 
 @pytest.mark.nightly
@@ -350,9 +243,12 @@ def test_quantize_and_demo(
 def test_demo_default(
     checkpoint: CheckpointSpec, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    cleanup()
+    Llama3_2_1B_PreSplit.clear_cache()
+    Llama3_2_1B_QuantizablePreSplit.clear_cache()
+    FPSplitModelWrapper.clear_cache()
+    QuantizedSplitModelWrapper.clear_cache()
     llama_3_2_1b_chat_demo(
-        fp_model_cls=FP_Model,
+        fp_model_cls=FPSplitModelWrapper,
         default_prompt="What is the capital of France?",
         test_checkpoint=checkpoint,
     )
@@ -379,8 +275,14 @@ def test_compile(
     device: ScorecardDevice,
     checkpoint: CheckpointSpec,
 ) -> None:
-    cleanup()
-    run_llm_compile(
+    Llama3_2_1B_PreSplit.clear_cache()
+    Llama3_2_1B_QuantizablePreSplit.clear_cache()
+    FPSplitModelWrapper.clear_cache()
+    QuantizedSplitModelWrapper.clear_cache()
+    # Pass both prompt (ar128) and token (ar1) sequence lengths so the
+    # genie bundle includes both model types. Without ar1, Genie must use
+    # the ar128 model for token generation, halving TPS on-device.
+    result = run_llm_compile(
         export_model,
         MODEL_ID,
         precision,
@@ -388,20 +290,10 @@ def test_compile(
         device,
         extra_model_arguments=dict(
             checkpoint=checkpoint,
-            sequence_length=DEFAULT_EXPORT_SEQUENCE_LENGTHS,
-            context_length=DEFAULT_EXPORT_CONTEXT_LENGTHS,
+            sequence_length=[DEFAULT_SEQUENCE_LENGTH, 1],
+            context_length=[DEFAULT_CONTEXT_LENGTH],
             _skip_quantsim_creation=True,
-            model_cls=Model,
-            model_id=MODEL_ID,
-            model_asset_version=MODEL_ASSET_VERSION,
-            num_splits=NUM_SPLITS,
-            num_layers_per_split=NUM_LAYERS_PER_SPLIT,
             output_dir=test.GENIE_BUNDLES_ROOT,
-            fp_model=FP_Model.from_pretrained(
-                sequence_length=max(DEFAULT_EXPORT_SEQUENCE_LENGTHS),
-                context_length=max(DEFAULT_EXPORT_CONTEXT_LENGTHS),
-            ),
-            position_processor_cls=PositionProcessor,
         ),
         skip_compile_options=True,
         skip_downloading=False,
@@ -415,6 +307,16 @@ def test_compile(
     assert (genie_bundle_path / "tokenizer.json").exists()
     assert (genie_bundle_path / "genie_config.json").exists()
     assert (genie_bundle_path / "htp_backend_ext_config.json").exists()
+    assert (genie_bundle_path / "sample_prompt.txt").exists()
+
+    # TODO(https://github.com/qcom-ai-hub/tetracode/issues/19349): remove once
+    # the QDC w4/w4a16 mix-up is resolved.
+    assert isinstance(result, MultiGraphCollectionExportResult)
+    print(f"[provenance] precision={precision} bundle={genie_bundle_path}")
+    for compile_key, compile_job in (result.compile_jobs or {}).items():
+        print(f"[provenance] compile_job[{compile_key}]={compile_job.job_id}")
+    for link_key, link_job in (result.link_jobs or {}).items():
+        print(f"[provenance] link_job[{link_key}]={link_job.job_id}")
 
 
 @pytest.mark.nightly
@@ -436,17 +338,27 @@ def test_qdc(
     scorecard_path: ScorecardCompilePath,
     device: ScorecardDevice,
 ) -> None:
-    cleanup()
+    Llama3_2_1B_PreSplit.clear_cache()
+    Llama3_2_1B_QuantizablePreSplit.clear_cache()
+    FPSplitModelWrapper.clear_cache()
+    QuantizedSplitModelWrapper.clear_cache()
     genie_bundle_path = Path(
         test.GENIE_BUNDLES_ROOT
     ) / ASSET_CONFIG.get_release_asset_name(
         MODEL_ID, TargetRuntime.GENIE, precision, device.chipset
     )
+    if scorecard_path.runtime != TargetRuntime.GENIE:
+        pytest.skip("This test is only valid for Genie runtime.")
     if not (genie_bundle_path / "genie_config.json").exists():
         pytest.fail("The genie bundle does not exist.")
-    from qai_hub_models.utils.qdc.genie_jobs import (
-        submit_genie_bundle_to_qdc_device,
-    )
+
+    from qai_hub_models.utils.qdc.genie_jobs import submit_genie_bundle_to_qdc_device
+
+    # TODO(https://github.com/qcom-ai-hub/tetracode/issues/19349): remove once
+    # the QDC w4/w4a16 mix-up is resolved.
+    metadata = ModelMetadata.from_json(genie_bundle_path / "metadata.json")
+    print(f"[provenance] precision={precision} bundle={genie_bundle_path}")
+    print(f"[provenance] metadata.json precision={metadata.precision}")
 
     qdc_job_name = f"Genie {MODEL_ID} {precision}"
     tps, min_ttft, _ = submit_genie_bundle_to_qdc_device(
@@ -463,11 +375,12 @@ def test_qdc(
         tps=tps,
         ttft_ms=min_ttft,
     )
+    # With both ar128 and ar1 in the genie bundle, TPS should match v1.
     if precision == Precision.w4:
         assert tps > 24.0
         assert min_ttft < 100000.0
     else:
-        assert tps > 18.00
+        assert tps > 18.0
         assert min_ttft < 135000.0
 
 
@@ -480,10 +393,21 @@ def _get_llm_perf_params() -> list[tuple[Precision, ScorecardDevice]]:
     return params if params else [(Precision.w4, cs_8_elite_qrd)]
 
 
+@pytest.fixture(scope="session")
+def llm_perf_config() -> LLMPerfConfig:
+    return LLMPerfConfig.from_environment()
+
+
+@pytest.fixture(scope="session")
+def compile_job_cache() -> CompileJobCache:
+    return CompileJobCache()
+
+
 @pytest.mark.llm_perf
 @pytest.mark.skipif(
-    not importlib.util.find_spec("qualcomm_device_cloud_sdk"),
-    reason="This test requires the qualcomm_device_cloud_sdk package.",
+    not torch.cuda.is_available()
+    or not importlib.util.find_spec("qualcomm_device_cloud_sdk"),
+    reason="This test requires GPU and the qualcomm_device_cloud_sdk package.",
 )
 @pytest.mark.parametrize(("precision", "device"), _get_llm_perf_params())
 def test_llm_perf(
@@ -492,6 +416,11 @@ def test_llm_perf(
     compile_job_cache: CompileJobCache,
     llm_perf_config: LLMPerfConfig,
 ) -> None:
+    Llama3_2_1B_PreSplit.clear_cache()
+    Llama3_2_1B_QuantizablePreSplit.clear_cache()
+    FPSplitModelWrapper.clear_cache()
+    QuantizedSplitModelWrapper.clear_cache()
+
     tps, ttft = test.run_llm_perf_test(
         model_id=MODEL_ID,
         export_model_func=export_model,
@@ -499,16 +428,12 @@ def test_llm_perf(
         precision=precision,
         compile_job_cache=compile_job_cache,
         output_dir=test.GENIE_BUNDLES_ROOT,
-        model_cls=Model,
+        model_cls=Llama3_2_1B_QuantizablePreSplit,
         model_asset_version=MODEL_ASSET_VERSION,
         num_splits=NUM_SPLITS,
-        export_context_lengths=llm_perf_config.export_context_lengths
-        or DEFAULT_EXPORT_CONTEXT_LENGTHS,
-        export_sequence_lengths=llm_perf_config.export_sequence_lengths
-        or DEFAULT_EXPORT_SEQUENCE_LENGTHS,
-        fp_model_cls=FP_Model,
-        position_processor_cls=PositionProcessor,
-        num_layers_per_split=NUM_LAYERS_PER_SPLIT,
+        export_context_lengths=llm_perf_config.export_context_lengths,
+        export_sequence_lengths=llm_perf_config.export_sequence_lengths,
+        fp_model_cls=FPSplitModelWrapper,
         qairt_sdk_path=llm_perf_config.qairt_sdk_path,
         skip_perf_update=llm_perf_config.skip_perf_update,
     )
