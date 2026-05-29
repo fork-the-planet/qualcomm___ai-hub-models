@@ -12,6 +12,7 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+import qai_hub as hub
 import torch
 
 from qai_hub_models import Precision, TargetRuntime
@@ -414,8 +415,9 @@ def test_export(
         pytest.skip(str(e))
 
 
-# Serialize the model only once for all module + input pairs.
-# This speeds up tests and limits memory leaks.
+# Cache serialize() and hub.upload_model() across the module so the same
+# (component, graph, input_spec) is serialized once and the resulting bytes are
+# uploaded once -- matters most for multi-GB AIMET LLM bundles.
 @pytest.fixture(scope="module", autouse=True)
 def cached_serialize_for_export(
     tmp_path_factory: pytest.TempPathFactory,
@@ -423,6 +425,23 @@ def cached_serialize_for_export(
     cache_dir = tmp_path_factory.mktemp("serialize_cache")
     with pytest.MonkeyPatch.context() as mp:
         model_cache: dict[str, Path] = {}
+        upload_cache: dict[str, hub.Model] = {}
+
+        real_upload_model = hub.upload_model
+
+        def _cached_upload_model(
+            model: hub.client.SourceModel | str,
+            name: str | None = None,
+            project: str | hub.client.Project | None = None,
+        ) -> hub.Model:
+            key = str(model)
+            cached = upload_cache.get(key)
+            if cached is None:
+                cached = real_upload_model(model, name, project)
+                upload_cache[key] = cached
+            return cached
+
+        mp.setattr(hub, "upload_model", _cached_upload_model)
         serialize = Model.serialize
 
         def _cached_serialize(

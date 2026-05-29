@@ -16,3 +16,4 @@ additional_readme_section: |
 has_multi_graph: true
 separate_quantize_script: true
 test_split: llm
+skip_profile_and_inference: true

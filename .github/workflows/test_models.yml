@@ -67,6 +67,14 @@ on:
         description: JSON array of runner tags (e.g. '["tetra-ubuntu-2204", "self-hosted"]')
         type: string
 
+      container_image:
+        description: |
+          Container image for the job. When set (e.g. for GPU runners that lack a system Python),
+          all steps run inside this image instead of directly on the runner host. Empty string means
+          no container (run directly on the host).
+        type: string
+        default: ''
+
 env:
   # Versions MUST be quoted, otherwise they will be interpreted as a floats
   # (and version like 3.10 can be interpreted as 3.1).
@@ -76,9 +84,14 @@ env:
   VENV_PATH: build/ci-envs/qaihm-build
   CMAKE_ARGS: -DCMAKE_POLICY_VERSION_MINIMUM=3.5
 
+defaults:
+  run:
+    shell: bash
+
 jobs:
   exec_scorecard:
     runs-on: ${{ inputs.runs_on && inputs.runs_on != 'null' && fromJson(inputs.runs_on) || fromJson('["tetra-ubuntu-2204", "self-hosted"]') }}
+    container: ${{ inputs.container_image != '' && fromJSON(format('{{"image":"{0}","options":"--gpus all -v /local:/local"}}', inputs.container_image)) || null }}
     timeout-minutes: 600 # 10 hours - just for job submission
     env:
       QAIHM_TEST_IGNORE_KNOWN_FAILURES: ${{ inputs.ignore_known_failures && '1' || '0' }}
@@ -98,9 +111,26 @@ jobs:
     permissions:
       contents: read
       id-token: write
+      packages: read
 
     steps:
+      - name: Setup container user/group (GPU container only)
+        if: ${{ inputs.container_image != '' }}
+        env:
+          DOCKER_USER: qaihm_bot
+          DOCKER_GROUP: qaihm_bot_group
+          DOCKER_USER_ID: 4552456
+          DOCKER_GROUP_ID: 200
+        run: |
+          groupadd -g "$DOCKER_GROUP_ID" "$DOCKER_GROUP" || true
+          useradd -m -u "$DOCKER_USER_ID" -g "$DOCKER_GROUP_ID" -d "/home/$DOCKER_USER" -s /bin/bash "$DOCKER_USER" || true
+
       - uses: actions/checkout@v6
+
+      - name: Mark workspace as a safe git directory (container only)
+        if: ${{ inputs.container_image != '' }}
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
 
       - name: Check Out Updated Static Asset Configs
         if: ${{ inputs.sync_assets_branch != '' }}
@@ -112,8 +142,8 @@ jobs:
         id: ci_setup
         uses: ./.github/actions/ci-setup
         with:
-          sudo-password: ${{ secrets.TETRASERVICE_PASSWORD }}
-          python-version: ${{ env.PYTHON_VERSION }}
+          sudo-password: ${{ inputs.container_image == '' && secrets.TETRASERVICE_PASSWORD || '' }}
+          python-version: ${{ inputs.container_image != '' && 'USE_EXISTING_INSTALL' || env.PYTHON_VERSION }}
           venv-path: ${{ env.VENV_PATH }}
           aws-role-arn: ${{ secrets.QAIHM_CI_AWS_ROLE_ARN }}
           hub-deployments: ${{ env.QAIHM_TEST_DEPLOYMENT }},prod

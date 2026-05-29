@@ -77,6 +77,7 @@ on:
 env:
   PYTHON_VERSION: ${{ inputs.python_version }}
   VENV_PATH: build/ci-envs/qaihm-build
+  QAIHM_CI: 1
 
 jobs:
   split_models:
@@ -84,6 +85,7 @@ jobs:
     runs-on: [tetra-ubuntu-2204, self-hosted]
     outputs:
       matrix: ${{ steps.split.outputs.matrix }}
+      needs_gpu_image: ${{ steps.split.outputs.needs_gpu_image }}
     steps:
       - uses: actions/checkout@v6
 
@@ -106,12 +108,72 @@ jobs:
           echo "matrix=$MATRIX" >> "$GITHUB_OUTPUT"
           NUM_SPLITS=$(echo "$MATRIX" | python -c "import sys, json; print(len(json.load(sys.stdin)))")
           echo "num_splits=$NUM_SPLITS" >> "$GITHUB_OUTPUT"
+          NEEDS_GPU=$(echo "$MATRIX" | python -c "import sys, json; splits=json.load(sys.stdin); print('true' if any((s.get('runs_on') or {}).get('group') == 'GPU' for s in splits) else 'false')")
+          echo "needs_gpu_image=$NEEDS_GPU" >> "$GITHUB_OUTPUT"
           echo "Splits: $MATRIX"
           echo "Number of splits: $NUM_SPLITS"
+          echo "Needs GPU image: $NEEDS_GPU"
+
+  setup_docker_gpu:
+    name: Setup GPU Docker Image
+    needs: split_models
+    if: ${{ needs.split_models.outputs.needs_gpu_image == 'true' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+      id-token: write
+      packages: write
+    outputs:
+      image_tag: ${{ steps.tag.outputs.image_tag }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          lfs: false
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v4
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Get tag
+        id: tag
+        run: |
+          echo "image_tag=${{ github.sha }}" >> $GITHUB_OUTPUT
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: docker/Dockerfile
+          push: true
+          tags: ghcr.io/${{ github.repository }}/gpu_builder:${{ steps.tag.outputs.image_tag }}
+          cache-from: type=gha,scope=gpu_builder
+          cache-to: type=gha,scope=gpu_builder,mode=max
+          build-args: |
+            QAIHM_CI=${{ env.QAIHM_CI }}
+            QAIHM_TEST_MODELS=${{ inputs.models }}
 
   start_jobs:
     name: Submit Jobs (${{ matrix.split.split_name }})
-    needs: split_models
+    needs: [split_models, setup_docker_gpu]
+    if: ${{ !cancelled() && needs.split_models.result == 'success' && (needs.setup_docker_gpu.result == 'success' || needs.setup_docker_gpu.result == 'skipped') }}
+    permissions:
+      contents: read
+      id-token: write
+      packages: read
     secrets: inherit
     strategy:
       matrix:
@@ -130,6 +192,7 @@ jobs:
       ignore_known_failures: ${{ inputs.ignore_known_failures }}
       split_name: ${{ matrix.split.split_name }}
       runs_on: ${{ toJson(matrix.split.runs_on) }}
+      container_image: ${{ matrix.split.runs_on.group == 'GPU' && needs.setup_docker_gpu.outputs.image_tag != '' && format('ghcr.io/{0}/gpu_builder:{1}', github.repository, needs.setup_docker_gpu.outputs.image_tag) || '' }}
       sync_assets_branch: ${{ inputs.sync_assets_branch }}
       python_version: ${{ inputs.python_version }}
       disable_override_workbench_job_timeout: ${{ inputs.disable_override_workbench_job_timeout }}

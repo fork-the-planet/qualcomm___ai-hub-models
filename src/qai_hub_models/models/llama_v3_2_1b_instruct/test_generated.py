@@ -12,6 +12,7 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+import qai_hub as hub
 import torch
 
 import qai_hub_models.models.llama_v3_2_1b_instruct as _model_module
@@ -21,7 +22,6 @@ from qai_hub_models.models.llama_v3_2_1b_instruct.export import (
     compile_model,
     export_model,
     link_model,
-    profile_model,
     upload_model,
 )
 from qai_hub_models.scorecard import (
@@ -35,7 +35,6 @@ from qai_hub_models.scorecard.execution_helpers import (
     get_evaluation_parameterized_pytest_config,
     get_export_parameterized_pytest_config,
     get_link_parameterized_pytest_config,
-    get_profile_parameterized_pytest_config,
     pytest_device_idfn,
 )
 from qai_hub_models.scorecard.utils.testing import skip_invalid_runtime_device
@@ -44,9 +43,7 @@ from qai_hub_models.scorecard.utils.testing_export_eval import (
     compile_via_export,
     export_test_e2e,
     link_via_export,
-    profile_via_export,
     split_and_group_accuracy_validation_output_batches,
-    torch_inference_for_accuracy_validation,
     torch_inference_for_accuracy_validation_outputs,
 )
 from qai_hub_models.utils.input_spec import InputSpec
@@ -152,43 +149,6 @@ def test_link(
         pytest.skip(str(e))
 
 
-@pytest.mark.parametrize(
-    ("precision", "scorecard_path", "device"),
-    get_profile_parameterized_pytest_config(
-        MODEL_ID,
-        ENABLED_PRECISION_RUNTIMES,
-        PASSING_PRECISION_RUNTIMES,
-        can_use_quantize_job=False,
-    ),
-    ids=pytest_device_idfn,
-)
-@pytest.mark.profile
-def test_profile(
-    precision: Precision, scorecard_path: ScorecardProfilePath, device: ScorecardDevice
-) -> None:
-    skip_invalid_runtime_device(Model, scorecard_path.runtime, device)
-    try:
-        profile_via_export(
-            profile_model,
-            MODEL_ID,
-            Model.from_pretrained(checkpoint=f"DEFAULT_{str(precision).upper()}"),
-            precision,
-            scorecard_path,
-            device,
-        )
-    except CachedScorecardJobError as e:
-        pytest.skip(str(e))
-
-
-@pytest.mark.inference
-def test_val_data_torch() -> None:
-    if not HAS_EVAL_DATASET:
-        return
-    torch_inference_for_accuracy_validation(
-        Model.from_pretrained(), Model.get_eval_dataset_classes()[0], MODEL_ID
-    )
-
-
 @pytest.fixture(scope="module")
 def torch_val_outputs() -> list[np.ndarray]:
     """
@@ -276,8 +236,9 @@ def test_export(
         pytest.skip(str(e))
 
 
-# Serialize the model only once for all module + input pairs.
-# This speeds up tests and limits memory leaks.
+# Cache serialize() and hub.upload_model() across the module so the same
+# (component, graph, input_spec) is serialized once and the resulting bytes are
+# uploaded once -- matters most for multi-GB AIMET LLM bundles.
 @pytest.fixture(scope="module", autouse=True)
 def cached_serialize_for_export(
     tmp_path_factory: pytest.TempPathFactory,
@@ -285,16 +246,33 @@ def cached_serialize_for_export(
     cache_dir = tmp_path_factory.mktemp("serialize_cache")
     with pytest.MonkeyPatch.context() as mp:
         model_cache: dict[str, Path] = {}
+        upload_cache: dict[str, hub.Model] = {}
+
+        real_upload_model = hub.upload_model
+
+        def _cached_upload_model(
+            model: hub.client.SourceModel | str,
+            name: str | None = None,
+            project: str | hub.client.Project | None = None,
+        ) -> hub.Model:
+            key = str(model)
+            cached = upload_cache.get(key)
+            if cached is None:
+                cached = real_upload_model(model, name, project)
+                upload_cache[key] = cached
+            return cached
+
+        mp.setattr(hub, "upload_model", _cached_upload_model)
         serialize_component_graph = Model.serialize_component_graph
 
         def _cached_serialize_component_graph(
             self: Model,
             component_name: str,
-            graph_name: str,
+            graph_name: str | None,
             output_dir: str | os.PathLike,
             input_spec: InputSpec | None = None,
         ) -> Path:
-            model_key = component_name + graph_name + str(input_spec)
+            model_key = f"{component_name}|{graph_name}|{input_spec}"
             cached = model_cache.get(model_key)
             if not cached:
                 cached = serialize_component_graph(

@@ -9,8 +9,8 @@ supported_precisions:
 add_genie_url_to_export: true
 orchestrator_runtimes: [genie]
 only_allow_orchestrator_runtimes: true
-skip_hub_tests_and_scorecard: true
 separate_quantize_script: true
+skip_profile_and_inference: true
 pip_install_flags_gpu: onnxruntime-gpu==1.23.2 https://github.com/quic/aimet/releases/download/2.26.0/aimet_onnx-2.26.0+cu121-cp310-cp310-manylinux_2_34_x86_64.whl -f https://download.pytorch.org/whl/torch_stable.html
 additional_readme_section: |
   ## Deploying Qwen2.5-VL-7B-Instruct on-device
