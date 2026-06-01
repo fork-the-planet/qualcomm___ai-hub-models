@@ -127,6 +127,9 @@ dmypy.json
 *bin/ADSP_Inference_Test
 *.DS_Store
 
+# Local Claude Code worktrees
+.claude/worktrees/
+
 # Hub exports
 **/*.mlmodel
 **/*.tflite

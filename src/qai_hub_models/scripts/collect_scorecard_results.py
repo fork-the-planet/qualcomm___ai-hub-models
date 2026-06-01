@@ -350,7 +350,7 @@ def process_e2e_recipe_model(
         for export_test_summary in summaries:
             entries.append_export_test_summary(export_test_summary)
 
-    if sync_code_gen and not cj.freeze_perf_yaml:
+    if sync_code_gen and not cj.freeze_perf_yaml and not cj.skip_profile_and_inference:
         # Enable or disable runtimes on this model depending on whether the default device has passing jobs
         update_code_gen_failure_reasons(summaries, test_params.enabled_paths, cj)
         code_gen_path = cj.to_model_yaml(model_id)
@@ -379,7 +379,11 @@ def process_e2e_recipe_model(
 
         # Load old model card and write new model card
         prev_model_card = QAIHMModelPerf.from_model(model_id, not_exists_ok=True)
-        if not cj.freeze_perf_yaml and model_card_without_failures:
+        if (
+            not cj.freeze_perf_yaml
+            and not cj.skip_profile_and_inference
+            and model_card_without_failures
+        ):
             card_path = model_card_without_failures.to_model_yaml(model_id)
             print_with_id(f"Wrote {card_path}")
 
