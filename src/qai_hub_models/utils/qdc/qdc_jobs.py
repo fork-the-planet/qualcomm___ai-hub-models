@@ -5,6 +5,8 @@
 from __future__ import annotations
 
 import time
+from collections.abc import Callable
+from typing import TypeVar
 
 import qai_hub as hub
 from qualcomm_device_cloud_sdk.api import qdc_api
@@ -43,6 +45,13 @@ HUB_DEVICE_TO_QDC_DEVICE_MAP = {
 DEFAULT_JOB_TIMEOUT = 7200  # 2 hours
 # Polling interval for job status checks (in seconds)
 POLL_INTERVAL = 30
+# Backoff schedule for retrying a *failed* QDC call (distinct from the steady
+# POLL_INTERVAL cadence used while a job is legitimately still running). Grows
+# exponentially from RETRY_BACKOFF_BASE, doubling each attempt, capped at
+# RETRY_BACKOFF_MAX. Keeps us from hammering a rate-limited (429) or overloaded
+# (5xx) endpoint on tight upload/download loops that have no outer throttle.
+RETRY_BACKOFF_BASE = 5
+RETRY_BACKOFF_MAX = 60
 # QDC submission fail if name exceeds this
 QDC_JOB_NAME_LIMIT = 32
 # Number of consecutive errors tolerated when polling status (absorbs transient
@@ -55,34 +64,88 @@ STATUS_POLL_MAX_RETRIES = 5
 # credentials; 429/5xx are the usual rate-limit / server-side blips.
 _RETRYABLE_STATUS_CODES = (403, 429, 500, 502, 503, 504)
 
+# Return type for the generic retry wrapper.
+CallableRetT = TypeVar("CallableRetT")
 
-def _is_retryable_status_error(err: Exception) -> bool:
-    """True if err is a QDC SDK status-code error we should retry."""
+
+def _matched_retryable_status_code(err: Exception) -> int | None:
+    """Return the retryable HTTP status code embedded in err, else None.
+
+    The QDC SDK raises a bare ``Exception`` whose message embeds the code (e.g.
+    "failed with status code 403 and message: Invalid Credentials"). We return
+    only the matched code so callers can log it WITHOUT echoing the rest of the
+    message, which may contain server-reflected secrets or credential fragments.
+    """
     message = str(err)
-    return any(f"status code {code}" in message for code in _RETRYABLE_STATUS_CODES)
+    for code in _RETRYABLE_STATUS_CODES:
+        if f"status code {code}" in message:
+            return code
+    return None
 
 
-def _get_job_status_with_retry(client: object, job_id: str) -> str:
-    """Poll job status, retrying through transient errors.
+def _backoff_seconds(attempt: int) -> int:
+    """Exponential backoff (capped) for the given zero-based retry attempt."""
+    return min(RETRY_BACKOFF_BASE * (2**attempt), RETRY_BACKOFF_MAX)
+
+
+def _call_with_retry(
+    func: Callable[[], CallableRetT], description: str
+) -> CallableRetT:
+    """Call ``func()``, retrying through transient QDC errors.
 
     Covers transient network blips (DNS resolution failures, dropped
     connections) as well as transient HTTP status errors the QDC SDK raises
     as a bare Exception (e.g. an intermittent 403 / 429 / 5xx). A genuinely
-    fatal error still surfaces after STATUS_POLL_MAX_RETRIES attempts.
+    fatal error still surfaces after STATUS_POLL_MAX_RETRIES attempts. Delays
+    between attempts use capped exponential backoff (see ``_backoff_seconds``)
+    so we don't hammer a rate-limited or overloaded endpoint.
+
+    Used to wrap QDC SDK calls that talk to the network and are safe to repeat:
+    status polling (``get_jobs_job_id``), log retrieval/download
+    (``get_jobs_download_logs``) and artifact upload (``upload_file``, whose
+    only commit point is the final chunk and which returns the uuid of the
+    successful attempt). Job submission is intentionally NOT wrapped, since a
+    partially-succeeded submit could create a duplicate running job on retry.
+
+    Parameters
+    ----------
+    func
+        Zero-argument callable performing the QDC SDK call.
+    description
+        Short human-readable label for the call, used in retry log lines.
+
+    Returns
+    -------
+    CallableRetT
+        The return value of ``func()`` on the first successful attempt.
     """
     for attempt in range(STATUS_POLL_MAX_RETRIES):
         try:
-            return qdc_api.get_job_status(client, job_id)
-        except (OSError, ConnectionError, TimeoutError):  # noqa: PERF203
+            return func()
+        except (OSError, ConnectionError, TimeoutError) as err:  # noqa: PERF203
             if attempt == STATUS_POLL_MAX_RETRIES - 1:
                 raise
-            time.sleep(POLL_INTERVAL)
+            delay = _backoff_seconds(attempt)
+            # type(err).__name__ only — the message may carry sensitive details.
+            print(
+                f"[QDC retry] {description} failed with transient network error "
+                f"({err!r}); attempt {attempt + 1}/"
+                f"{STATUS_POLL_MAX_RETRIES}, retrying in {delay}s."
+            )
+            time.sleep(delay)
         except Exception as err:
-            if not _is_retryable_status_error(err) or (
-                attempt == STATUS_POLL_MAX_RETRIES - 1
-            ):
+            code = _matched_retryable_status_code(err)
+            if code is None or attempt == STATUS_POLL_MAX_RETRIES - 1:
                 raise
-            time.sleep(POLL_INTERVAL)
+            delay = _backoff_seconds(attempt)
+            # Log only the matched status code, never the raw message, which the
+            # SDK may populate with credential fragments or reflected secrets.
+            print(
+                f"[QDC retry] {description} failed with transient status code "
+                f"{code}; attempt {attempt + 1}/{STATUS_POLL_MAX_RETRIES}, "
+                f"retrying in {delay}s."
+            )
+            time.sleep(delay)
     raise AssertionError("unreachable")  # loop either returns or raises
 
 
@@ -205,14 +268,20 @@ class QDCJobs:
         job_status = None
         elapsed = 0
         while elapsed < timeout:
-            job_status = _get_job_status_with_retry(self.client, job_id)
+            job_status = _call_with_retry(
+                lambda: qdc_api.get_job_status(self.client, job_id),
+                f"get_job_status({job_id})",
+            )
             if job_status not in _RUNNING_STATES:
                 time.sleep(POLL_INTERVAL)
                 return job_status
             time.sleep(POLL_INTERVAL)
             elapsed += POLL_INTERVAL
 
-        job_status = _get_job_status_with_retry(self.client, job_id)
+        job_status = _call_with_retry(
+            lambda: qdc_api.get_job_status(self.client, job_id),
+            f"get_job_status({job_id})",
+        )
         if job_status in {"Completed", "Canceled", "Failed", "Error", "Aborted"}:
             return job_status
         qdc_api.abort_job(self.client, job_id)
@@ -285,7 +354,10 @@ class QDCJobs:
         status = None
         elapsed = 0
         while elapsed <= timeout:
-            status = qdc_api.get_job_log_upload_status(self.client, job_id).lower()
+            status = _call_with_retry(
+                lambda: qdc_api.get_job_log_upload_status(self.client, job_id),
+                f"get_job_log_upload_status({job_id})",
+            ).lower()
             if status not in {"completed", "failed"}:
                 print(
                     f"Job is completed and the server is uploading logs, "
@@ -315,7 +387,10 @@ class QDCJobs:
         job_log_files: list
             List of job log files.
         """
-        return qdc_api.get_job_log_files(self.client, job_id)
+        return _call_with_retry(
+            lambda: qdc_api.get_job_log_files(self.client, job_id),
+            f"get_job_log_files({job_id})",
+        )
 
     def download_job_log_files(self, filename: str, target_path: str) -> None:
         """Download job log files from QDC.
@@ -327,7 +402,14 @@ class QDCJobs:
         target_path
             Local path to save the downloaded file.
         """
-        qdc_api.download_job_log_files(self.client, filename, target_path)
+        # Safe to retry as-is: the SDK fetches the whole file into memory inside
+        # its own request, and only opens target_path (mode 'wb', single write)
+        # after a 200 response. A failed attempt never touches the file, and a
+        # later success truncates it -- so no partial/corrupt file can persist.
+        _call_with_retry(
+            lambda: qdc_api.download_job_log_files(self.client, filename, target_path),
+            f"download_job_log_files({filename})",
+        )
 
     def upload_file(self, file_path: str, artifact_type: ArtifactType) -> str:
         """Upload a file to QDC.
@@ -344,4 +426,14 @@ class QDCJobs:
         artifact_id: str
             ID of the uploaded artifact.
         """
-        return qdc_api.upload_file(self.client, file_path, artifact_type)
+        # The SDK uploads large bundles in chunks (start -> continue -> end); the
+        # artifact only commits at the final `end_upload`, and upload_file returns
+        # the uuid of the *successful* attempt -- so a retry after a mid-transfer
+        # drop at worst leaves an orphaned, unreferenced partial artifact server-
+        # side (a benign leak), never a duplicate job. We therefore still retry
+        # network errors here. The 403 actually observed in CI lands on the first
+        # call (post_artifacts_start_upload), before anything is committed.
+        return _call_with_retry(
+            lambda: qdc_api.upload_file(self.client, file_path, artifact_type),
+            f"upload_file({file_path})",
+        )
