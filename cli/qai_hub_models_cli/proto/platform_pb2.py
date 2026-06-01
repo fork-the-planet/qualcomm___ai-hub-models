@@ -20,31 +20,31 @@ from qai_hub_models_cli.proto.shared import precision_pb2 as shared_dot_precisio
 from qai_hub_models_cli.proto.shared import runtime_pb2 as shared_dot_runtime__pb2
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0eplatform.proto\x12\x05qaihm\x1a\x16shared/precision.proto\x1a\x14shared/runtime.proto\"N\n\x0fOperatingSystem\x12*\n\x06ostype\x18\x01 \x01(\x0e\x32\x1a.qaihm.OperatingSystemType\x12\x0f\n\x07version\x18\x02 \x01(\t\"r\n\x0e\x46ormFactorInfo\x12&\n\x0b\x66orm_factor\x18\x01 \x01(\x0e\x32\x11.qaihm.FormFactor\x12\x14\n\x0c\x64isplay_name\x18\x02 \x01(\t\x12\"\n\x05world\x18\x03 \x01(\x0e\x32\x13.qaihm.WebsiteWorld\"\xfa\x01\n\nDeviceInfo\x12\x0c\n\x04name\x18\x01 \x01(\t\x12\x0f\n\x07\x63hipset\x18\x02 \x01(\t\x12\x11\n\tnpu_count\x18\x03 \x01(\r\x12\"\n\x02os\x18\x04 \x01(\x0b\x32\x16.qaihm.OperatingSystem\x12&\n\x0b\x66orm_factor\x18\x05 \x01(\x0e\x32\x11.qaihm.FormFactor\x12\x0e\n\x06vendor\x18\x06 \x01(\t\x12 \n\x04icon\x18\x07 \x01(\x0e\x32\x12.qaihm.WebsiteIcon\x12\x1c\n\x14\x65nabled_in_scorecard\x18\x08 \x01(\x08\x12\x1e\n\x16\x61vailable_in_workbench\x18\t \x01(\x08\"\xe2\x01\n\x0b\x43hipsetInfo\x12\x0c\n\x04name\x18\x01 \x01(\t\x12\x0f\n\x07\x61liases\x18\x02 \x03(\t\x12\x16\n\x0emarketing_name\x18\x03 \x01(\t\x12\"\n\x05world\x18\x04 \x01(\x0e\x32\x13.qaihm.WebsiteWorld\x12\x15\n\rsupports_fp16\x18\x05 \x01(\x08\x12\x13\n\x0bhtp_version\x18\x06 \x01(\r\x12\x11\n\tsoc_model\x18\x07 \x01(\r\x12\x18\n\x10reference_device\x18\x08 \x01(\t\x12\x1f\n\x17supports_weight_sharing\x18\t \x01(\x08\"x\n\x0bRuntimeInfo\x12\x1f\n\x07runtime\x18\x01 \x01(\x0e\x32\x0e.qaihm.Runtime\x12\x17\n\x0fwebsite_runtime\x18\x02 \x01(\t\x12\x16\n\x0e\x66ile_extension\x18\x03 \x01(\t\x12\x17\n\x0fis_aot_compiled\x18\x04 \x01(\x08\"\xc1\x01\n\x0cPlatformInfo\x12\x14\n\x0c\x61ihm_version\x18\x01 \x01(\t\x12$\n\x08runtimes\x18\x02 \x03(\x0b\x32\x12.qaihm.RuntimeInfo\x12+\n\x0c\x66orm_factors\x18\x03 \x03(\x0b\x32\x15.qaihm.FormFactorInfo\x12\"\n\x07\x64\x65vices\x18\x04 \x03(\x0b\x32\x11.qaihm.DeviceInfo\x12$\n\x08\x63hipsets\x18\x05 \x03(\x0b\x32\x12.qaihm.ChipsetInfo*\xb0\x01\n\nFormFactor\x12\x1b\n\x17\x46ORM_FACTOR_UNSPECIFIED\x10\x00\x12\x15\n\x11\x46ORM_FACTOR_PHONE\x10\x01\x12\x16\n\x12\x46ORM_FACTOR_TABLET\x10\x02\x12\x14\n\x10\x46ORM_FACTOR_AUTO\x10\x03\x12\x12\n\x0e\x46ORM_FACTOR_XR\x10\x04\x12\x17\n\x13\x46ORM_FACTOR_COMPUTE\x10\x05\x12\x13\n\x0f\x46ORM_FACTOR_IOT\x10\x06*\xc7\x01\n\x13OperatingSystemType\x12%\n!OPERATING_SYSTEM_TYPE_UNSPECIFIED\x10\x00\x12!\n\x1dOPERATING_SYSTEM_TYPE_ANDROID\x10\x01\x12!\n\x1dOPERATING_SYSTEM_TYPE_WINDOWS\x10\x02\x12\x1f\n\x1bOPERATING_SYSTEM_TYPE_LINUX\x10\x03\x12\"\n\x1eOPERATING_SYSTEM_TYPE_QC_LINUX\x10\x04*\xad\x01\n\x0cWebsiteWorld\x12\x1d\n\x19WEBSITE_WORLD_UNSPECIFIED\x10\x00\x12\x18\n\x14WEBSITE_WORLD_MOBILE\x10\x01\x12\x19\n\x15WEBSITE_WORLD_COMPUTE\x10\x02\x12\x1c\n\x18WEBSITE_WORLD_AUTOMOTIVE\x10\x03\x12\x15\n\x11WEBSITE_WORLD_IOT\x10\x04\x12\x14\n\x10WEBSITE_WORLD_XR\x10\x05*\xac\x03\n\x0bWebsiteIcon\x12\x1c\n\x18WEBSITE_ICON_UNSPECIFIED\x10\x00\x12\x14\n\x10WEBSITE_ICON_CAR\x10\x01\x12\x19\n\x15WEBSITE_ICON_IOT_CHIP\x10\x02\x12\x1a\n\x16WEBSITE_ICON_IOT_DRONE\x10\x03\x12\x1f\n\x1bWEBSITE_ICON_LAPTOP_GENERIC\x10\x04\x12\x1f\n\x1bWEBSITE_ICON_LAPTOP_X_ELITE\x10\x05\x12\x1a\n\x16WEBSITE_ICON_PHONE_S21\x10\x06\x12\x1a\n\x16WEBSITE_ICON_PHONE_S22\x10\x07\x12\x1a\n\x16WEBSITE_ICON_PHONE_S23\x10\x08\x12 \n\x1cWEBSITE_ICON_PHONE_S23_ULTRA\x10\t\x12\x1a\n\x16WEBSITE_ICON_PHONE_S24\x10\n\x12 \n\x1cWEBSITE_ICON_PHONE_S24_ULTRA\x10\x0b\x12\x1f\n\x1bWEBSITE_ICON_TABLET_ANDROID\x10\x0c\x12\x1b\n\x17WEBSITE_ICON_XR_HEADSET\x10\rb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0eplatform.proto\x12\x05qaihm\x1a\x16shared/precision.proto\x1a\x14shared/runtime.proto\"N\n\x0fOperatingSystem\x12*\n\x06ostype\x18\x01 \x01(\x0e\x32\x1a.qaihm.OperatingSystemType\x12\x0f\n\x07version\x18\x02 \x01(\t\"r\n\x0e\x46ormFactorInfo\x12&\n\x0b\x66orm_factor\x18\x01 \x01(\x0e\x32\x11.qaihm.FormFactor\x12\x14\n\x0c\x64isplay_name\x18\x02 \x01(\t\x12\"\n\x05world\x18\x03 \x01(\x0e\x32\x13.qaihm.WebsiteWorld\"\x95\x02\n\nDeviceInfo\x12\x0c\n\x04name\x18\x01 \x01(\t\x12\x0f\n\x07\x63hipset\x18\x02 \x01(\t\x12\x11\n\tnpu_count\x18\x03 \x01(\r\x12\"\n\x02os\x18\x04 \x01(\x0b\x32\x16.qaihm.OperatingSystem\x12&\n\x0b\x66orm_factor\x18\x05 \x01(\x0e\x32\x11.qaihm.FormFactor\x12\x0e\n\x06vendor\x18\x06 \x01(\t\x12 \n\x04icon\x18\x07 \x01(\x0e\x32\x12.qaihm.WebsiteIcon\x12\x1c\n\x14\x65nabled_in_scorecard\x18\x08 \x01(\x08\x12\x1e\n\x16\x61vailable_in_workbench\x18\t \x01(\x08\x12\x19\n\x11reference_chipset\x18\n \x01(\t\"\xe2\x01\n\x0b\x43hipsetInfo\x12\x0c\n\x04name\x18\x01 \x01(\t\x12\x0f\n\x07\x61liases\x18\x02 \x03(\t\x12\x16\n\x0emarketing_name\x18\x03 \x01(\t\x12\"\n\x05world\x18\x04 \x01(\x0e\x32\x13.qaihm.WebsiteWorld\x12\x15\n\rsupports_fp16\x18\x05 \x01(\x08\x12\x13\n\x0bhtp_version\x18\x06 \x01(\r\x12\x11\n\tsoc_model\x18\x07 \x01(\r\x12\x18\n\x10reference_device\x18\x08 \x01(\t\x12\x1f\n\x17supports_weight_sharing\x18\t \x01(\x08\"x\n\x0bRuntimeInfo\x12\x1f\n\x07runtime\x18\x01 \x01(\x0e\x32\x0e.qaihm.Runtime\x12\x17\n\x0fwebsite_runtime\x18\x02 \x01(\t\x12\x16\n\x0e\x66ile_extension\x18\x03 \x01(\t\x12\x17\n\x0fis_aot_compiled\x18\x04 \x01(\x08\"\xc1\x01\n\x0cPlatformInfo\x12\x14\n\x0c\x61ihm_version\x18\x01 \x01(\t\x12$\n\x08runtimes\x18\x02 \x03(\x0b\x32\x12.qaihm.RuntimeInfo\x12+\n\x0c\x66orm_factors\x18\x03 \x03(\x0b\x32\x15.qaihm.FormFactorInfo\x12\"\n\x07\x64\x65vices\x18\x04 \x03(\x0b\x32\x11.qaihm.DeviceInfo\x12$\n\x08\x63hipsets\x18\x05 \x03(\x0b\x32\x12.qaihm.ChipsetInfo*\xb0\x01\n\nFormFactor\x12\x1b\n\x17\x46ORM_FACTOR_UNSPECIFIED\x10\x00\x12\x15\n\x11\x46ORM_FACTOR_PHONE\x10\x01\x12\x16\n\x12\x46ORM_FACTOR_TABLET\x10\x02\x12\x14\n\x10\x46ORM_FACTOR_AUTO\x10\x03\x12\x12\n\x0e\x46ORM_FACTOR_XR\x10\x04\x12\x17\n\x13\x46ORM_FACTOR_COMPUTE\x10\x05\x12\x13\n\x0f\x46ORM_FACTOR_IOT\x10\x06*\xc7\x01\n\x13OperatingSystemType\x12%\n!OPERATING_SYSTEM_TYPE_UNSPECIFIED\x10\x00\x12!\n\x1dOPERATING_SYSTEM_TYPE_ANDROID\x10\x01\x12!\n\x1dOPERATING_SYSTEM_TYPE_WINDOWS\x10\x02\x12\x1f\n\x1bOPERATING_SYSTEM_TYPE_LINUX\x10\x03\x12\"\n\x1eOPERATING_SYSTEM_TYPE_QC_LINUX\x10\x04*\xad\x01\n\x0cWebsiteWorld\x12\x1d\n\x19WEBSITE_WORLD_UNSPECIFIED\x10\x00\x12\x18\n\x14WEBSITE_WORLD_MOBILE\x10\x01\x12\x19\n\x15WEBSITE_WORLD_COMPUTE\x10\x02\x12\x1c\n\x18WEBSITE_WORLD_AUTOMOTIVE\x10\x03\x12\x15\n\x11WEBSITE_WORLD_IOT\x10\x04\x12\x14\n\x10WEBSITE_WORLD_XR\x10\x05*\xac\x03\n\x0bWebsiteIcon\x12\x1c\n\x18WEBSITE_ICON_UNSPECIFIED\x10\x00\x12\x14\n\x10WEBSITE_ICON_CAR\x10\x01\x12\x19\n\x15WEBSITE_ICON_IOT_CHIP\x10\x02\x12\x1a\n\x16WEBSITE_ICON_IOT_DRONE\x10\x03\x12\x1f\n\x1bWEBSITE_ICON_LAPTOP_GENERIC\x10\x04\x12\x1f\n\x1bWEBSITE_ICON_LAPTOP_X_ELITE\x10\x05\x12\x1a\n\x16WEBSITE_ICON_PHONE_S21\x10\x06\x12\x1a\n\x16WEBSITE_ICON_PHONE_S22\x10\x07\x12\x1a\n\x16WEBSITE_ICON_PHONE_S23\x10\x08\x12 \n\x1cWEBSITE_ICON_PHONE_S23_ULTRA\x10\t\x12\x1a\n\x16WEBSITE_ICON_PHONE_S24\x10\n\x12 \n\x1cWEBSITE_ICON_PHONE_S24_ULTRA\x10\x0b\x12\x1f\n\x1bWEBSITE_ICON_TABLET_ANDROID\x10\x0c\x12\x1b\n\x17WEBSITE_ICON_XR_HEADSET\x10\rb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
 _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'platform_pb2', _globals)
 if _descriptor._USE_C_DESCRIPTORS == False:
   DESCRIPTOR._options = None
-  _globals['_FORMFACTOR']._serialized_start=1068
-  _globals['_FORMFACTOR']._serialized_end=1244
-  _globals['_OPERATINGSYSTEMTYPE']._serialized_start=1247
-  _globals['_OPERATINGSYSTEMTYPE']._serialized_end=1446
-  _globals['_WEBSITEWORLD']._serialized_start=1449
-  _globals['_WEBSITEWORLD']._serialized_end=1622
-  _globals['_WEBSITEICON']._serialized_start=1625
-  _globals['_WEBSITEICON']._serialized_end=2053
+  _globals['_FORMFACTOR']._serialized_start=1095
+  _globals['_FORMFACTOR']._serialized_end=1271
+  _globals['_OPERATINGSYSTEMTYPE']._serialized_start=1274
+  _globals['_OPERATINGSYSTEMTYPE']._serialized_end=1473
+  _globals['_WEBSITEWORLD']._serialized_start=1476
+  _globals['_WEBSITEWORLD']._serialized_end=1649
+  _globals['_WEBSITEICON']._serialized_start=1652
+  _globals['_WEBSITEICON']._serialized_end=2080
   _globals['_OPERATINGSYSTEM']._serialized_start=71
   _globals['_OPERATINGSYSTEM']._serialized_end=149
   _globals['_FORMFACTORINFO']._serialized_start=151
   _globals['_FORMFACTORINFO']._serialized_end=265
   _globals['_DEVICEINFO']._serialized_start=268
-  _globals['_DEVICEINFO']._serialized_end=518
-  _globals['_CHIPSETINFO']._serialized_start=521
-  _globals['_CHIPSETINFO']._serialized_end=747
-  _globals['_RUNTIMEINFO']._serialized_start=749
-  _globals['_RUNTIMEINFO']._serialized_end=869
-  _globals['_PLATFORMINFO']._serialized_start=872
-  _globals['_PLATFORMINFO']._serialized_end=1065
+  _globals['_DEVICEINFO']._serialized_end=545
+  _globals['_CHIPSETINFO']._serialized_start=548
+  _globals['_CHIPSETINFO']._serialized_end=774
+  _globals['_RUNTIMEINFO']._serialized_start=776
+  _globals['_RUNTIMEINFO']._serialized_end=896
+  _globals['_PLATFORMINFO']._serialized_start=899
+  _globals['_PLATFORMINFO']._serialized_end=1092
 # @@protoc_insertion_point(module_scope)

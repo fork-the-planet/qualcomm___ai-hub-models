@@ -93,6 +93,10 @@ message DeviceInfo {
   bool enabled_in_scorecard = 8;
 
   bool available_in_workbench = 9;
+
+  // For "similar" devices not in workbench: the chipset whose perf numbers
+  // are duplicated onto this device. Empty for workbench-native devices.
+  string reference_chipset = 10;
 }
 
 message ChipsetInfo {

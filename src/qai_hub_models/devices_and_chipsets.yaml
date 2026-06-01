@@ -414,6 +414,7 @@ devices:
     enabled_in_scorecard: true
   Dragonwing IQ-8275 EVK:
     chipset: qualcomm-qcs8275
+    reference_chipset: qualcomm-sa7255p
     os:
       ostype: Linux
       version: Ubuntu 24.04
@@ -422,7 +423,8 @@ devices:
     icon: IoT_Chip
     available_in_workbench: false
   SA8255P ADP:
-    chipset: qualcomm-sa8775p
+    chipset: qualcomm-sa8255p
+    reference_chipset: qualcomm-sa8775p
     os:
       ostype: Android
       version: '14'
@@ -432,7 +434,8 @@ devices:
     npu_count: 2
     available_in_workbench: false
   SA8650P ADP:
-    chipset: qualcomm-sa8775p
+    chipset: qualcomm-sa8650p
+    reference_chipset: qualcomm-sa8775p
     os:
       ostype: Android
       version: '14'
@@ -442,7 +445,8 @@ devices:
     npu_count: 2
     available_in_workbench: false
   Dragonwing Q-7790:
-    chipset: qualcomm-snapdragon-7gen4
+    chipset: qualcomm-qcs7790
+    reference_chipset: qualcomm-snapdragon-7gen4
     os:
       ostype: Android
       version: '15'
@@ -451,7 +455,8 @@ devices:
     icon: IoT_Drone
     available_in_workbench: false
   Dragonwing Q-8750:
-    chipset: qualcomm-snapdragon-8-elite
+    chipset: qualcomm-qcs8750
+    reference_chipset: qualcomm-snapdragon-8-elite
     os:
       ostype: Android
       version: '15'
@@ -460,7 +465,8 @@ devices:
     icon: IoT_Drone
     available_in_workbench: false
   Dragonwing IQ-X5121:
-    chipset: qualcomm-snapdragon-x-plus-8-core
+    chipset: qualcomm-qcs5121
+    reference_chipset: qualcomm-snapdragon-x-plus-8-core
     os:
       ostype: Windows
       version: '11'
@@ -469,7 +475,8 @@ devices:
     icon: IoT_Chip
     available_in_workbench: false
   Dragonwing IQ-X7181:
-    chipset: qualcomm-snapdragon-x-elite
+    chipset: qualcomm-qcs7181
+    reference_chipset: qualcomm-snapdragon-x-elite
     os:
       ostype: Windows
       version: '11'
@@ -766,4 +773,64 @@ chipsets:
     htp_version: 75
     soc_model: 67
     reference_device: Dragonwing IQ-8275 EVK
+    supports_weight_sharing: true
+  qualcomm-sa8255p:
+    aliases:
+    - qualcomm-sa8255p
+    marketing_name: Qualcomm® SA8255P
+    world: Automotive
+    supports_fp16: true
+    htp_version: 73
+    soc_model: 52
+    reference_device: SA8255P ADP
+    supports_weight_sharing: true
+  qualcomm-sa8650p:
+    aliases:
+    - qualcomm-sa8650p
+    marketing_name: Qualcomm® SA8650P
+    world: Automotive
+    supports_fp16: true
+    htp_version: 73
+    soc_model: 52
+    reference_device: SA8650P ADP
+    supports_weight_sharing: true
+  qualcomm-qcs7790:
+    aliases:
+    - qualcomm-qcs7790
+    marketing_name: Qualcomm® QCS7790
+    world: IoT
+    supports_fp16: true
+    htp_version: 73
+    soc_model: 86
+    reference_device: Dragonwing Q-7790
+    supports_weight_sharing: true
+  qualcomm-qcs8750:
+    aliases:
+    - qualcomm-qcs8750
+    marketing_name: Qualcomm® QCS8750
+    world: IoT
+    supports_fp16: true
+    htp_version: 79
+    soc_model: 69
+    reference_device: Dragonwing Q-8750
+    supports_weight_sharing: true
+  qualcomm-qcs5121:
+    aliases:
+    - qualcomm-qcs5121
+    marketing_name: Qualcomm® QCS5121
+    world: IoT
+    supports_fp16: true
+    htp_version: 73
+    soc_model: 60
+    reference_device: Dragonwing IQ-X5121
+    supports_weight_sharing: true
+  qualcomm-qcs7181:
+    aliases:
+    - qualcomm-qcs7181
+    marketing_name: Qualcomm® QCS7181
+    world: IoT
+    supports_fp16: true
+    htp_version: 73
+    soc_model: 60
+    reference_device: Dragonwing IQ-X7181
     supports_weight_sharing: true

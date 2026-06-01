@@ -34,6 +34,7 @@ supported_devices:
 - XR2 Gen 2 (Proxy)
 - Dragonwing IQ-9075 EVK
 - SA7255P ADP
+- Dragonwing IQ-8275 EVK
 - SA8295P ADP
 - Snapdragon 7 Gen 4 QRD
 - Dragonwing Q-7790
@@ -48,10 +49,16 @@ supported_chipsets:
 - qualcomm-snapdragon-888
 - qualcomm-snapdragon-x-plus-8-core
 - qualcomm-qcs6490
+- qualcomm-qcs8275
 - qualcomm-qcs8550-proxy
 - qualcomm-sa8775p
+- qualcomm-sa8650p
+- qualcomm-sa8255p
 - qualcomm-qcm6690
+- qualcomm-qcs7181
+- qualcomm-qcs7790
 - qualcomm-qcs8450-proxy
+- qualcomm-qcs8750
 - qualcomm-qcs9075
 - qualcomm-sa7255p
 - qualcomm-sa8295p
@@ -565,6 +572,34 @@ precisions:
               tool_versions:
                 qairt: 2.42.0.251225135753_193295
                 onnx_runtime: 1.24.3
+          Dragonwing IQ-8275 EVK:
+            qnn_dlc:
+              job_id: jpvzvklrg
+              job_status: Passed
+              inference_time_milliseconds: 7.823
+              estimated_peak_memory_range_mb:
+                min: 1
+                max: 33
+              primary_compute_unit: NPU
+              layer_counts:
+                total: 219
+                npu: 219
+              tool_versions:
+                qairt: 2.45.0.260326154327
+            tflite:
+              job_id: jp0e40025
+              job_status: Passed
+              inference_time_milliseconds: 7.846
+              estimated_peak_memory_range_mb:
+                min: 0
+                max: 64
+              primary_compute_unit: NPU
+              layer_counts:
+                total: 129
+                npu: 129
+              tool_versions:
+                qairt: 2.45.0.260326154327
+                litert: 1.4.3
   w8a8:
     components:
       Inception-v3:
@@ -1237,3 +1272,31 @@ precisions:
               tool_versions:
                 qairt: 2.42.0.251225135753_193295
                 onnx_runtime: 1.24.3
+          Dragonwing IQ-8275 EVK:
+            tflite:
+              job_id: jp3qj2km5
+              job_status: Passed
+              inference_time_milliseconds: 1.631
+              estimated_peak_memory_range_mb:
+                min: 0
+                max: 49
+              primary_compute_unit: NPU
+              layer_counts:
+                total: 144
+                npu: 144
+              tool_versions:
+                qairt: 2.45.0.260326154327
+                litert: 1.4.3
+            qnn_dlc:
+              job_id: jp8wzy7xp
+              job_status: Passed
+              inference_time_milliseconds: 1.546
+              estimated_peak_memory_range_mb:
+                min: 0
+                max: 47
+              primary_compute_unit: NPU
+              layer_counts:
+                total: 219
+                npu: 219
+              tool_versions:
+                qairt: 2.45.0.260326154327

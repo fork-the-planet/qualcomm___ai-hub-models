@@ -173,6 +173,11 @@ class FormFactorYaml(BaseQAIHMConfig):
 
 class DeviceDetailsYaml(BaseQAIHMConfig):
     chipset: str
+    # Only set in similar_devices.yaml: the chipset whose perf numbers are
+    # duplicated onto this device. The device's `chipset` is what gets added
+    # to `supported_chipsets` in perf.yaml; `reference_chipset` is the lookup
+    # key used to find a workbench device with results to copy.
+    reference_chipset: str | None = None
     os: ScorecardDevice.OperatingSystem
     form_factor: ScorecardDevice.FormFactor
     vendor: str
@@ -197,6 +202,7 @@ class DeviceDetailsYaml(BaseQAIHMConfig):
         return platform_pb2.DeviceInfo(
             name=name,
             chipset=self.chipset,
+            reference_chipset=self.reference_chipset or "",
             npu_count=self.npu_count,
             os=platform_pb2.OperatingSystem(
                 ostype=_OS_TYPE_TO_PROTO[self.os.ostype.value],
@@ -217,14 +223,17 @@ def _load_similar_devices_raw() -> DevicesAndChipsetsYaml:
 
 
 @cache
-def load_similar_devices() -> dict[str, list[str]]:
+def load_similar_devices() -> dict[str, tuple[str, list[str]]]:
     """
-    Load the similar devices mapping, resolving chipsets to device names.
+    Load the similar devices mapping, resolving reference chipsets to device names.
 
-    Matches the entry's chipset, plus any chipset that normalizes to the same
-    value via sanitize_chipset_name (e.g. 8-elite-for-galaxy -> 8-elite).
+    For each entry, the lookup uses `reference_chipset` (or `chipset` if unset),
+    plus any chipset that normalizes to the same value via sanitize_chipset_name
+    (e.g. 8-elite-for-galaxy -> 8-elite).
 
-    Returns unsupported_device_name -> list of supported device names.
+    Returns unsupported_device_name -> (real_chipset, [reference_device_names]).
+    The real_chipset (the device's own `chipset` field) gets added to perf.yaml's
+    `supported_chipsets` list when perf numbers are copied from a reference device.
     """
     raw = _load_similar_devices_raw()
 
@@ -241,12 +250,14 @@ def load_similar_devices() -> dict[str, list[str]]:
             sanitized_to_devices[key] = []
         sanitized_to_devices[key].append(name)
 
-    resolved: dict[str, list[str]] = {}
+    resolved: dict[str, tuple[str, list[str]]] = {}
     for unsupported_name, entry in raw.devices.items():
-        if entry.chipset in raw.chipsets:
-            continue  # this is not a similar device; we're also defining a chipset that is not in workbench
-        key = sanitize_chipset_name(entry.chipset)
-        resolved[unsupported_name] = sanitized_to_devices.get(key, [])
+        lookup_chipset = entry.reference_chipset or entry.chipset
+        key = sanitize_chipset_name(lookup_chipset)
+        resolved[unsupported_name] = (
+            entry.chipset,
+            sanitized_to_devices.get(key, []),
+        )
     return resolved
 
 
@@ -422,6 +433,10 @@ class DevicesAndChipsetsYaml(BaseQAIHMConfig):
             assert device_entry.chipset in out.chipsets, (
                 f"Unknown chipset for device {device_name} in similar-devices.yaml: {device_entry.chipset}"
             )
+            if device_entry.reference_chipset is not None:
+                assert device_entry.reference_chipset in out.chipsets, (
+                    f"Unknown reference_chipset for device {device_name} in similar-devices.yaml: {device_entry.reference_chipset}"
+                )
         out.devices.update(sd.devices)
 
         for chipset_name, chipset_entry in sd.chipsets.items():

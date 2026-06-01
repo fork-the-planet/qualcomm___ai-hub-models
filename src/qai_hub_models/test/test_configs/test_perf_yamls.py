@@ -5,7 +5,9 @@
 
 from qai_hub_models.configs.devices_and_chipsets_yaml import (
     SCORECARD_DEVICE_YAML_PATH,
+    SIMILAR_DEVICES_YAML_PATH,
     DevicesAndChipsetsYaml,
+    _load_similar_devices_raw,
     load_similar_devices,
 )
 from qai_hub_models.configs.info_yaml import QAIHMModelInfo
@@ -98,13 +100,77 @@ def test_perf_yaml() -> None:
         ) from None
 
 
+def test_similar_devices_chipsets_resolve() -> None:
+    """Every chipset and reference_chipset referenced from similar_devices.yaml
+    must be defined in devices_and_chipsets.yaml's chipsets: section, otherwise
+    perf-yaml propagation can silently drop entries.
+    """
+    raw = _load_similar_devices_raw()
+    canonical_chipsets = set(DevicesAndChipsetsYaml.load().chipsets)
+    # similar_devices.yaml may define non-workbench chipsets locally; those
+    # propagate into devices_and_chipsets.yaml via codegen, so we treat both
+    # sources as valid for the lookup.
+    valid_chipsets = canonical_chipsets | set(raw.chipsets)
+
+    for device_name, entry in raw.devices.items():
+        assert entry.chipset in valid_chipsets, (
+            f"similar device {device_name!r}: chipset {entry.chipset!r} not "
+            f"defined in {SCORECARD_DEVICE_YAML_PATH} or {SIMILAR_DEVICES_YAML_PATH}"
+        )
+        if entry.reference_chipset is not None:
+            assert entry.reference_chipset in valid_chipsets, (
+                f"similar device {device_name!r}: reference_chipset "
+                f"{entry.reference_chipset!r} not defined in "
+                f"{SCORECARD_DEVICE_YAML_PATH} or {SIMILAR_DEVICES_YAML_PATH}"
+            )
+
+
 def test_apply_similar_devices_idempotent() -> None:
-    """Applying similar devices to an already-processed perf.yaml should be a no-op."""
+    """A second apply on a perf.yaml that has already had similar devices applied
+    must be a no-op for both ``supported_devices`` and ``supported_chipsets``.
+    """
     mapping = load_similar_devices()
 
     perf = QAIHMModelPerf.from_model("inception_v3")
-    before_devices = [str(d) for d in perf.supported_devices]
+    perf.apply_similar_devices(mapping)
+    after_devices = [str(d) for d in perf.supported_devices]
+    after_chipsets = list(perf.supported_chipsets)
 
     perf.apply_similar_devices(mapping)
 
-    assert before_devices == [str(d) for d in perf.supported_devices]
+    assert after_devices == [str(d) for d in perf.supported_devices]
+    assert after_chipsets == list(perf.supported_chipsets)
+
+
+def test_apply_similar_devices_adds_real_chipset() -> None:
+    """When perf data is duplicated onto a similar device, its real chipset
+    should be added to ``supported_chipsets``.
+    """
+    mapping = load_similar_devices()
+
+    perf = QAIHMModelPerf.from_model("inception_v3")
+    # Strip any pre-existing similar-device entries so we observe the real-chipset
+    # insertion fresh, and verify it doesn't re-trigger after a second apply.
+    similar_names = set(mapping)
+    real_chipsets = {real for real, _ in mapping.values()}
+    perf.supported_devices = [
+        d for d in perf.supported_devices if str(d) not in similar_names
+    ]
+    perf.supported_chipsets = [
+        c for c in perf.supported_chipsets if c not in real_chipsets
+    ]
+    for prec in perf.precisions.values():
+        for comp in prec.components.values():
+            for d in list(comp.performance_metrics):
+                if str(d) in similar_names:
+                    del comp.performance_metrics[d]
+
+    perf.apply_similar_devices(mapping)
+
+    # IQ-8275 EVK mirrors SA7255P ADP, which inception_v3 has perf on.
+    assert "qualcomm-qcs8275" in perf.supported_chipsets
+
+    # Idempotent for the chipset list as well.
+    chips_after = list(perf.supported_chipsets)
+    perf.apply_similar_devices(mapping)
+    assert chips_after == list(perf.supported_chipsets)

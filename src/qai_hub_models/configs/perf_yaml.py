@@ -18,6 +18,7 @@ from qai_hub_models import Precision
 from qai_hub_models.configs.proto_helpers import precision_to_proto, runtime_to_proto
 from qai_hub_models.configs.tool_versions import ToolVersions
 from qai_hub_models.scorecard import ScorecardDevice, ScorecardProfilePath
+from qai_hub_models.scorecard.results.chipset_helpers import sorted_chipsets
 from qai_hub_models.utils.base_config import BaseQAIHMConfig
 from qai_hub_models.utils.path_helpers import QAIHM_MODELS_ROOT
 
@@ -130,54 +131,57 @@ class QAIHMModelPerf(BaseQAIHMConfig):
             and not self.precisions
         )
 
-    def apply_similar_devices(self, mapping: dict[str, list[str]]) -> None:
+    def apply_similar_devices(self, mapping: dict[str, tuple[str, list[str]]]) -> None:
         """
         Duplicate performance entries from supported devices to similar unsupported devices.
 
         Parameters
         ----------
         mapping
-            Dict of unsupported_device_name -> list of similar supported device names.
-            The first matching device with results is used.
+            Dict of unsupported_device_name -> (real_chipset, list of reference device names).
+            The first reference device with results is used as the perf source. The
+            real_chipset is added to ``supported_chipsets`` when perf data is placed.
         """
         similar_device_objs = {
             name: ScorecardDevice(name, name, register=False) for name in mapping
         }
 
-        # Tracks which unsupported names already have perf data (from a prior apply or earlier component).
-        placed: set[str] = set()
+        # Names this call actually copied perf data onto. Only these drive the
+        # chipset-insertion below; pre-existing entries keep whatever
+        # supported_chipsets already had (avoids "fix-up" surprises and keeps
+        # the function purely additive on its own outputs).
+        newly_placed: set[str] = set()
 
         for precision_details in self.precisions.values():
             for component in precision_details.components.values():
                 existing_devices = {str(d): d for d in component.performance_metrics}
 
-                for unsupported_name, similar_names in mapping.items():
+                for unsupported_name, (_, reference_names) in mapping.items():
                     if unsupported_name in existing_devices:
-                        placed.add(unsupported_name)
                         continue
 
-                    for name in similar_names:
+                    for name in reference_names:
                         if name in existing_devices:
                             component.performance_metrics[
                                 similar_device_objs[unsupported_name]
                             ] = copy.copy(
                                 component.performance_metrics[existing_devices[name]]
                             )
-                            placed.add(unsupported_name)
+                            newly_placed.add(unsupported_name)
                             break
 
-        # Build reverse lookup: supported_device_name -> [unsupported_names]
-        supported_to_similar: dict[str, list[str]] = {}
-        for unsupported_name, similar_names in mapping.items():
-            for name in similar_names:
-                supported_to_similar.setdefault(name, []).append(unsupported_name)
+        # Build reverse lookup: reference_device_name -> [unsupported_names]
+        reference_to_similar: dict[str, list[str]] = {}
+        for unsupported_name, (_, reference_names) in mapping.items():
+            for name in reference_names:
+                reference_to_similar.setdefault(name, []).append(unsupported_name)
 
         existing_names = {str(d) for d in self.supported_devices}
         new_devices: list[ScorecardDevice] = []
         inserted: set[str] = set()
         for device in self.supported_devices:
             new_devices.append(device)
-            for unsupported_name in supported_to_similar.get(str(device), []):
+            for unsupported_name in reference_to_similar.get(str(device), []):
                 if (
                     unsupported_name not in existing_names
                     and unsupported_name not in inserted
@@ -185,6 +189,16 @@ class QAIHMModelPerf(BaseQAIHMConfig):
                     new_devices.append(similar_device_objs[unsupported_name])
                     inserted.add(unsupported_name)
         self.supported_devices = new_devices
+
+        # Add the real chipset for each newly-placed similar device.
+        existing_chipsets = set(self.supported_chipsets)
+        new_chipsets = {
+            mapping[name][0]
+            for name in newly_placed
+            if mapping[name][0] not in existing_chipsets
+        }
+        if new_chipsets:
+            self.supported_chipsets = sorted_chipsets(existing_chipsets | new_chipsets)
 
     def for_each_entry(
         self,
