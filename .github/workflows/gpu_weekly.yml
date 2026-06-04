@@ -168,6 +168,15 @@ jobs:
         pip install qualcomm_device_cloud_sdk-*.whl
         pip uninstall -y onnxruntime
 
+    - name: Install LLM response grader venv
+      run: |
+        # The grading-based evaluate tasks require a separate venv due to
+        # dependency conflicts.
+        cd $GITHUB_WORKSPACE
+        python3 scripts/build_and_test.py \
+          --venv="$HOME/qaihm-dev-grader" \
+          install_llm_grader_requirements
+
     - name: Install model specific dependencies and run tests
       run: |
         cd $GITHUB_WORKSPACE && \

@@ -45,6 +45,7 @@ from qai_hub_models.utils.onnx.helpers import ONNXBundle
 if TYPE_CHECKING:
     from aimet_onnx.quantsim import QuantizationSimModel
 
+    from qai_hub_models.utils.base_dataset import BaseDataset
     from qai_hub_models.utils.input_spec import InputSpec
 
 from qai_hub.public_rest_api import DatasetEntries
@@ -155,6 +156,12 @@ class Qwen2VLTextBase(Qwen2Base):
         spec["vision_start"] = "<|vision_start|>"
         spec["vision_end"] = "<|vision_end|>"
         return spec
+
+    @classmethod
+    def get_eval_dataset_classes(cls) -> list[type[BaseDataset]]:
+        from qai_hub_models.datasets.prompts import MultimodalPrompts
+
+        return [*super().get_eval_dataset_classes(), MultimodalPrompts]
 
     @classmethod
     def edit_llm_config(cls, llm_config: PretrainedConfig) -> PretrainedConfig:

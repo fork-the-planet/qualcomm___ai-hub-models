@@ -14,6 +14,7 @@ from transformers.cache_utils import DynamicCache
 
 from qai_hub_models import Precision
 from qai_hub_models.datasets import instantiate_dataset
+from qai_hub_models.evaluators.llm_evaluator import LLMEvaluator
 from qai_hub_models.models._shared.llm.generator import LLM_Generator
 from qai_hub_models.models._shared.llm.model import (
     DEFAULT_CONTEXT_LENGTH,
@@ -79,6 +80,7 @@ def evaluate(
     vision_encoder_cls: Any = None,
     hf_repo_name: str | None = None,
     vlm_image_size: tuple[int, int] | None = None,
+    task_kwargs: Mapping[str, Any] | None = None,
 ) -> tuple[float, str]:
     checkpoint_type = CheckpointType.from_checkpoint(kwargs["checkpoint"])
     if checkpoint_type == CheckpointType.INVALID:
@@ -148,7 +150,12 @@ def evaluate(
     evaluator = fp_model.get_evaluator(
         dataset_cls.dataset_name(),
         torch.device("cpu") if not is_fp else host_device,
+        **(task_kwargs or {}),
     )
+    # Every LLM eval task resolves to an LLMEvaluator, which tells the generator
+    # whether to accumulate logits on CPU (forward-only metrics) or keep them on
+    # the model device (autoregressive generation). See LLMEvaluator.
+    assert isinstance(evaluator, LLMEvaluator)
 
     embedding = None
     if skip_fp_model_eval and evaluator.is_distance_metric and not is_fp:
@@ -164,7 +171,7 @@ def evaluate(
             [fp_model.to(host_device)],
             fp_model.tokenizer,
             embedding,
-            accumulate_logits_on_cpu=True,
+            accumulate_logits_on_cpu=evaluator.accumulate_logits_on_cpu,
         )
 
         fp_logits_list = []
@@ -236,7 +243,7 @@ def evaluate(
         [model],
         model.tokenizer,
         embedding,
-        accumulate_logits_on_cpu=True,
+        accumulate_logits_on_cpu=evaluator.accumulate_logits_on_cpu,
         vision_encoder=vision_encoder,
         hf_repo_name=hf_repo_name,
     )
@@ -246,8 +253,12 @@ def evaluate(
         data=eval_dataloader,
         eval_iterations=len(eval_dataloader),
     )
-    score = evaluator.get_accuracy_score()
-    formatted = evaluator.formatted_accuracy()
+    # Tear down the eval model BEFORE scoring. Every evaluator computes its
+    # score from state accumulated during add_from_dataset (no evaluator needs
+    # the live model at scoring time), and the response evaluator's score step
+    # spawns a separate grader process that loads a large model on the same GPU
+    # — leaving the eval model resident here causes the grader to OOM.
+    #
     # Tear down explicitly: generator holds refs to `model` via self.models and
     # self.selected_model, so `del model` alone leaves the AIMET ORT session
     # (and its CUDA arena) alive across parametrized test cases.
@@ -255,6 +266,11 @@ def evaluate(
     del model
     generator.release()
     del generator
+    gc.collect()
+    torch.cuda.empty_cache()
+
+    score = evaluator.get_accuracy_score()
+    formatted = evaluator.formatted_accuracy()
     return score, formatted
 
 
@@ -267,6 +283,7 @@ def llm_evaluate(
     vision_encoder_cls: Any = None,
     hf_repo_name: str | None = None,
     vlm_image_size: tuple[int, int] | None = None,
+    end_tokens: set[str] | None = None,
 ) -> None:
     parser = get_model_cli_parser(
         quantized_model_cls,
@@ -300,6 +317,37 @@ def llm_evaluate(
             help="VEG image width (must be divisible by patch_size * spatial_merge_size).",
         )
 
+    prompt_group = parser.add_argument_group(
+        "prompt-based tasks",
+        "Options that only apply to the prompt-generation tasks "
+        "('prompts', 'multimodal_prompts'); ignored by all other tasks.",
+    )
+    prompt_group.add_argument(
+        "--output-dir",
+        type=str,
+        default=None,
+        help=(
+            "Directory to write generated responses and grader summary. "
+            "Required for the 'prompts' and 'multimodal_prompts' tasks."
+        ),
+    )
+    prompt_group.add_argument(
+        "--max-new-tokens",
+        type=int,
+        default=2048,
+        help="Maximum new tokens to generate per prompt.",
+    )
+    prompt_group.add_argument(
+        "--grader-venv",
+        type=str,
+        default=None,
+        help=(
+            "Path to a venv whose python runs the response grader (separate "
+            "transformers version). If omitted, a venv named qaihm-dev-grader "
+            "is searched for under both the home dir and the repo root."
+        ),
+    )
+
     parser.set_defaults(sequence_length=default_calibration_seqlen)
     args = parser.parse_args()
 
@@ -322,6 +370,17 @@ def llm_evaluate(
         ds for ds in eval_dataset_classes if ds.dataset_name() == args.task
     )
 
+    task_kwargs: dict[str, Any] | None = None
+    if args.task in {"prompts", "multimodal_prompts"}:
+        if args.output_dir is None:
+            parser.error(f"--output-dir is required for the '{args.task}' task.")
+        task_kwargs = {
+            "output_dir": args.output_dir,
+            "max_new_tokens": args.max_new_tokens,
+            "end_tokens": end_tokens,
+            "grader_venv": args.grader_venv,
+        }
+
     _, formatted_accuracy = evaluate(
         quantized_model_cls=quantized_model_cls,
         fp_model_cls=fp_model_cls,
@@ -334,6 +393,7 @@ def llm_evaluate(
         vlm_image_size=vlm_image_size,
         prompt_sequence_length=args.sequence_length,
         context_length=args.context_length,
+        task_kwargs=task_kwargs,
     )
 
     print(formatted_accuracy)

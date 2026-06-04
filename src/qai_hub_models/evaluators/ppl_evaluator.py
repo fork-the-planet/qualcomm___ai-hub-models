@@ -6,27 +6,20 @@
 from __future__ import annotations
 
 import math
-from collections.abc import Callable
 from typing import TYPE_CHECKING
 
 import torch
 from torch.nn import CrossEntropyLoss
-from tqdm import tqdm
 
+from qai_hub_models.evaluators.llm_evaluator import LLMEvaluator
 from qai_hub_models.evaluators.metrics import PERPLEXITY, MetricMetadata
-from qai_hub_models.utils.base_evaluator import (
-    BaseEvaluator,
-    _DataLoader,
-)
 
 if TYPE_CHECKING:
     from transformers import PreTrainedTokenizerBase
     from transformers.modeling_outputs import CausalLMOutputWithPast
 
-    from qai_hub_models.models._shared.llm.generator import LLM_Generator
 
-
-class PerplexityEvaluator(BaseEvaluator):
+class PerplexityEvaluator(LLMEvaluator):
     """Evaluator for computing PPL of a Large Language Model.
     This may not be as generic as hoped and may need work. Works with Llama 3.2 3B.
 
@@ -69,55 +62,6 @@ class PerplexityEvaluator(BaseEvaluator):
 
     def formatted_accuracy(self) -> str:
         return f"PPL (lower is better): {self.get_accuracy_score():.2f}"
-
-    def for_each_batch(
-        self,
-        generator: LLM_Generator,
-        data: _DataLoader,
-        num_samples: int | None = None,
-        callback: (
-            Callable[[list[torch.Tensor], CausalLMOutputWithPast, torch.Tensor], None]
-            | None
-        ) = None,
-    ) -> None:
-        total_samples = 0
-        batch_size = 1
-        num_samples = num_samples or len(data)
-        with tqdm(
-            total=num_samples,
-            desc="Number of samples completed",
-        ) as pbar:
-            for sample in data:
-                input_ids, attention_mask, ground_truth = sample  # type:ignore[misc]
-                inputs = [input_ids, attention_mask]
-                inputs = [inp.to(self.device) for inp in inputs]
-                with torch.no_grad():
-                    outputs = generator(*inputs)
-                if callback:
-                    callback(inputs, outputs, ground_truth)
-                total_samples += 1
-                pbar.update(batch_size)
-                if total_samples >= num_samples:
-                    break
-
-    def add_from_dataset(
-        self,
-        model: torch.nn.Module,
-        data: _DataLoader,
-        eval_iterations: int | None = None,
-    ) -> None:
-        from qai_hub_models.models._shared.llm.generator import LLM_Generator
-
-        assert isinstance(model, LLM_Generator), "This evaluator only works on LLMs"
-
-        def _add_batch(
-            _: list[torch.Tensor],
-            outputs: CausalLMOutputWithPast,
-            ground_truth: torch.Tensor,
-        ) -> None:
-            self.add_batch(outputs, ground_truth)
-
-        self.for_each_batch(model, data, eval_iterations, _add_batch)
 
     def get_metric_metadata(self) -> MetricMetadata:
         return PERPLEXITY

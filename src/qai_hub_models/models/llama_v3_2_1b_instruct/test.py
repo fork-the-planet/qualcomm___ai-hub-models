@@ -151,9 +151,16 @@ def test_load_encodings_to_quantsim(checkpoint: str) -> None:
         ("DEFAULT_W4", "tiny_mmlu", 0.43, 0),
         pytest.param("DEFAULT_W4A16", "wikitext", 17.47, 0, marks=pytest.mark.nightly),
         ("DEFAULT_W4A16", "mmlu", 0.390, 1000),
+        # Prompt-generation + LLM-grader smoke test (5 samples). Nightly-marked
+        # so it also runs in the weekly suite. Greedy decoding + deterministic
+        # grader make the score reproducible.
+        pytest.param("DEFAULT_W4A16", "prompts", 1.0, 5, marks=pytest.mark.nightly),
         ("DEFAULT_UNQUANTIZED", "wikitext", 12.18, 0),
         ("DEFAULT_UNQUANTIZED", "mmlu", 0.482, 1000),
         ("DEFAULT_UNQUANTIZED", "tiny_mmlu", 0.41, 0),
+        pytest.param(
+            "DEFAULT_UNQUANTIZED", "prompts", 1.0, 5, marks=pytest.mark.nightly
+        ),
     ],
 )
 def test_evaluate(
@@ -161,6 +168,7 @@ def test_evaluate(
     task: str,
     expected_metric: float,
     num_samples: int,
+    tmp_path: Path,
 ) -> None:
     dataset_cls = next(
         d
@@ -175,6 +183,13 @@ def test_evaluate(
     extra_kwargs = (
         {"_skip_quantsim_creation": False, "fp_model": None} if is_unquantized else {}
     )
+    # The prompt-generation tasks persist responses and grade them in a
+    # separate venv; everything else scores a forward-only metric inline.
+    task_kwargs = (
+        {"output_dir": str(tmp_path)}
+        if task in {"prompts", "multimodal_prompts"}
+        else None
+    )
     actual_metric, _ = evaluate(
         quantized_model_cls=QuantizedSplitModelWrapper,
         fp_model_cls=FPSplitModelWrapper,
@@ -188,6 +203,7 @@ def test_evaluate(
             context_length=DEFAULT_CONTEXT_LENGTH,
             **extra_kwargs,
         ),
+        task_kwargs=task_kwargs,
     )
     log_evaluate_test_result(
         model_name=MODEL_ID,

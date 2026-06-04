@@ -329,63 +329,19 @@ class LLM_Generator(GenerationMixin, torch.nn.Module):
         attention_mask = processed["attention_mask"]
         pixel_values = processed["pixel_values"]
 
-        # Run vision encoder, one image at a time if needed.
-        # The VEG may have fixed input shapes for a single image, so we
-        # split multi-image pixel_values into per-image chunks.
-        self.vision_encoder.eval()
-        with torch.no_grad():
-            veg = self.vision_encoder
-            patch_size = veg._patch_size
-            img_h = veg._image_height
-            img_w = veg._image_width
-            single_seq_len = (img_h // patch_size) * (img_w // patch_size)  # type: ignore[operator, unused-ignore]
-            total_patches = pixel_values.shape[0]
-
-            if total_patches == single_seq_len or len(images) == 1:
-                vision_embeddings = veg(pixel_values=pixel_values)
-            elif total_patches % single_seq_len == 0:
-                chunks = pixel_values.split(single_seq_len, dim=0)
-                vision_embeddings = torch.cat(
-                    [veg(pixel_values=c) for c in chunks], dim=0
-                )
-            else:
-                # Dynamic-shape VEG or unexpected layout — try full tensor
-                vision_embeddings = veg(pixel_values=pixel_values)
+        vision_embeddings = self.run_vision_encoder(
+            pixel_values,
+            image_grid_thw=processed.get("image_grid_thw"),
+            num_images=len(images),
+        )
 
         # Get image token ID from config
         config = AutoConfig.from_pretrained(self.hf_repo_name, trust_remote_code=True)
         image_token_id = config.image_token_id
 
-        # Convert input_ids to text embeddings using the model's embedding table
-        text_embeddings = self.selected_model.convert_input_ids_to_embeddings(input_ids)
-
-        # Find image token positions and merge embeddings
-        image_mask = input_ids == image_token_id  # (batch, seq_len)
-
-        # Count image tokens - should match vision embedding tokens
-        num_image_tokens = image_mask.sum().item()
-        num_vision_tokens = vision_embeddings.shape[0]
-
-        if num_image_tokens != num_vision_tokens:
-            print(
-                f"Warning: Image token count ({num_image_tokens}) != "
-                f"vision embedding count ({num_vision_tokens})"
-            )
-
-        # Merge: replace image token positions with vision embeddings
-        # vision_embeddings shape: (num_tokens, hidden_size)
-        # text_embeddings shape: (batch, seq_len, hidden_size)
-        merged_embeddings = text_embeddings.clone()
-
-        # Expand mask for hidden dimension
-        image_mask_expanded = image_mask.unsqueeze(-1).expand_as(text_embeddings)
-
-        # Use masked_scatter to replace image token embeddings with vision embeddings
-        merged_embeddings = merged_embeddings.masked_scatter(
-            image_mask_expanded,
-            vision_embeddings.to(
-                device=merged_embeddings.device, dtype=merged_embeddings.dtype
-            ),
+        # Replace image token positions with the vision embeddings.
+        merged_embeddings = self.merge_vision_embeddings(
+            input_ids, vision_embeddings, image_token_id
         )
 
         # Free vision encoder to reclaim GPU memory before text model runs
@@ -399,6 +355,116 @@ class LLM_Generator(GenerationMixin, torch.nn.Module):
             "input_ids": input_ids,
             "attention_mask": attention_mask,
         }
+
+    def run_vision_encoder(
+        self,
+        pixel_values: torch.Tensor,
+        image_grid_thw: torch.Tensor | None = None,
+        num_images: int | None = None,
+    ) -> torch.Tensor:
+        """Run the vision encoder over ``pixel_values``, one image at a time.
+
+        The HF processor packs every image's patches into a single
+        ``pixel_values`` tensor (concatenated along dim 0). The VEG may assume a
+        fixed single-image input shape, so we split the packed tensor back into
+        per-image chunks, run the encoder once per image, and concatenate the
+        results into one ``(total_patches, hidden_size)`` sequence.
+
+        Per-image patch counts come from ``image_grid_thw`` (the processor's
+        authoritative per-image ``t*h*w``) when available; otherwise we fall
+        back to the VEG's fixed single-image patch count.
+
+        Parameters
+        ----------
+        pixel_values
+            Packed patch tensor of shape (total_patches, patch_feature_dim).
+        image_grid_thw
+            Per-image (t, h, w) grid from the processor; one row per image.
+            When provided, it is the authoritative chunk boundary.
+        num_images
+            Image count, used only in the ``image_grid_thw is None`` fallback to
+            short-circuit the single-image case.
+
+        Returns
+        -------
+        torch.Tensor
+            Vision embeddings of shape (total_patches, hidden_size).
+        """
+        veg = self.vision_encoder
+        assert veg is not None
+        veg.eval()
+        with torch.no_grad():
+            if image_grid_thw is not None:
+                per_image_patches = [
+                    int(thw[0] * thw[1] * thw[2]) for thw in image_grid_thw
+                ]
+                if len(per_image_patches) <= 1:
+                    return veg(pixel_values=pixel_values)
+                chunks = pixel_values.split(per_image_patches, dim=0)
+                return torch.cat([veg(pixel_values=c) for c in chunks], dim=0)
+
+            # No grid available: split by the VEG's fixed single-image shape.
+            patch_size = veg._patch_size
+            img_h = veg._image_height
+            img_w = veg._image_width
+            single_seq_len = (img_h // patch_size) * (img_w // patch_size)  # type: ignore[operator, unused-ignore]
+            total_patches = pixel_values.shape[0]
+            if total_patches == single_seq_len or num_images == 1:
+                return veg(pixel_values=pixel_values)
+            if total_patches % single_seq_len == 0:
+                chunks = pixel_values.split(single_seq_len, dim=0)
+                return torch.cat([veg(pixel_values=c) for c in chunks], dim=0)
+            # Dynamic-shape VEG or unexpected layout — try the full tensor.
+            return veg(pixel_values=pixel_values)
+
+    def merge_vision_embeddings(
+        self,
+        input_ids: torch.Tensor,
+        vision_embeddings: torch.Tensor,
+        image_token_id: int,
+    ) -> torch.Tensor:
+        """Splice vision embeddings into the text embedding sequence.
+
+        Converts ``input_ids`` to text embeddings, then replaces the embeddings
+        at image-token positions with ``vision_embeddings`` (one per image
+        token, in order). Callers run the vision encoder themselves — the
+        chunking strategy differs by entry point — and pass the resulting
+        per-token vision embeddings here.
+
+        Parameters
+        ----------
+        input_ids
+            Token ids of shape (batch, seq_len), with ``image_token_id`` at the
+            positions reserved for vision tokens.
+        vision_embeddings
+            Vision-encoder output of shape (num_image_tokens, hidden_size).
+        image_token_id
+            Token id marking image positions in ``input_ids``.
+
+        Returns
+        -------
+        torch.Tensor
+            Merged embeddings of shape (batch, seq_len, hidden_size).
+        """
+        text_embeddings = self.selected_model.convert_input_ids_to_embeddings(input_ids)
+        image_mask = input_ids == image_token_id
+
+        num_image_tokens = int(image_mask.sum().item())
+        num_vision_tokens = vision_embeddings.shape[0]
+        if num_image_tokens != num_vision_tokens:
+            print(
+                f"Warning: Image token count ({num_image_tokens}) != "
+                f"vision embedding count ({num_vision_tokens})"
+            )
+
+        merged_embeddings = text_embeddings.clone()
+        image_mask_expanded = image_mask.unsqueeze(-1).expand_as(text_embeddings)
+        return merged_embeddings.masked_scatter(
+            image_mask_expanded,
+            vision_embeddings.to(
+                device=merged_embeddings.device, dtype=merged_embeddings.dtype
+            ),
+        )
 
     def prepare_inputs_for_generation(
         self,

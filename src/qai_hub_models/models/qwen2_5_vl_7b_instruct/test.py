@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import importlib
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -59,8 +60,14 @@ def test_load_encodings_to_quantsim(checkpoint: str) -> None:
     [
         pytest.param("DEFAULT", "wikitext", 9.75, 0, marks=pytest.mark.nightly),
         ("DEFAULT", "mmlu", 0.689, 1000),
+        # Image+prompt generation + LLM-grader smoke test (5 samples). Left on
+        # the weekly (evaluate-only) suite — no nightly mark — since VLM
+        # generation is slower. Greedy decoding + deterministic grader make
+        # the score reproducible.
+        ("DEFAULT", "multimodal_prompts", 1.0, 5),
         ("DEFAULT_UNQUANTIZED", "wikitext", 8.38, 0),
         ("DEFAULT_UNQUANTIZED", "tiny_mmlu", 0.73, 0),
+        ("DEFAULT_UNQUANTIZED", "multimodal_prompts", 1.0, 5),
     ],
 )
 def test_evaluate(
@@ -68,6 +75,7 @@ def test_evaluate(
     task: str,
     expected_metric: float,
     num_samples: int,
+    tmp_path: Path,
 ) -> None:
     dataset_cls = next(
         d
@@ -76,6 +84,13 @@ def test_evaluate(
     )
     Qwen2_5_VL_7B_PreSplit.release()
     Qwen2_5_VL_7B_QuantizablePreSplit.release()
+    # The prompt-generation tasks persist responses and grade them in a
+    # separate venv; everything else scores a forward-only metric inline.
+    task_kwargs = (
+        {"output_dir": str(tmp_path)}
+        if task in {"prompts", "multimodal_prompts"}
+        else None
+    )
     actual_metric, _ = evaluate(
         quantized_model_cls=Qwen2_5_VL_7B_QuantizablePreSplit,
         fp_model_cls=Qwen2_5_VL_7B_PreSplit,
@@ -91,6 +106,7 @@ def test_evaluate(
         vision_encoder_cls=VisionEncoder,
         hf_repo_name=HF_REPO_NAME,
         vlm_image_size=(DEFAULT_IMAGE_WIDTH, DEFAULT_IMAGE_HEIGHT),
+        task_kwargs=task_kwargs,
     )
     log_evaluate_test_result(
         model_name=MODEL_ID,

@@ -456,8 +456,10 @@ def _get_evaluator(
     sequence_length: int,
     tokenizer: PreTrainedTokenizerBase,
     device: torch.device,
+    **task_kwargs: Any,
 ) -> BaseEvaluator:
     from qai_hub_models.evaluators.kldiv_evaluator import KLDivEvaluator
+    from qai_hub_models.evaluators.llm_response_evaluator import LLMResponseEvaluator
     from qai_hub_models.evaluators.mmlu_evaluator import MMLUEvaluator
     from qai_hub_models.evaluators.ppl_evaluator import PerplexityEvaluator
 
@@ -465,6 +467,21 @@ def _get_evaluator(
         return PerplexityEvaluator(context_length, device, tokenizer)
     if "tricky_llm_prompts" in task:
         return KLDivEvaluator(context_length, device, tokenizer, verbose=True)
+    if task in {"prompts", "multimodal_prompts"}:
+        if "output_dir" not in task_kwargs:
+            raise ValueError(
+                f"Task '{task}' requires 'output_dir' to be passed via "
+                f"get_evaluator(..., output_dir=...)."
+            )
+        return LLMResponseEvaluator(
+            context_length=context_length,
+            device=device,
+            tokenizer=tokenizer,
+            output_dir=task_kwargs["output_dir"],
+            max_new_tokens=task_kwargs.get("max_new_tokens", 2048),
+            end_tokens=task_kwargs.get("end_tokens"),
+            grader_venv=task_kwargs.get("grader_venv"),
+        )
     return MMLUEvaluator(context_length, device, tokenizer)
 
 
@@ -1460,17 +1477,26 @@ class LLMBase(BaseModel, LLMConfigEditor, ABC):
         )
 
     def get_evaluator(
-        self, task: str = "wikitext", device: torch.device = torch.device("cpu")
+        self,
+        task: str = "wikitext",
+        device: torch.device = torch.device("cpu"),
+        **task_kwargs: Any,
     ) -> BaseEvaluator:
         return _get_evaluator(
-            task, self.context_length, self.sequence_length, self.tokenizer, device
+            task,
+            self.context_length,
+            self.sequence_length,
+            self.tokenizer,
+            device,
+            **task_kwargs,
         )
 
     @classmethod
     def get_eval_dataset_classes(cls) -> list[type[BaseDataset]]:
         from qai_hub_models.datasets.mmmlu import mmmlu_dataset_classes
+        from qai_hub_models.datasets.prompts import TextPrompts
 
-        return mmmlu_dataset_classes()
+        return [*mmmlu_dataset_classes(), TextPrompts]
 
     def release(self) -> None:
         if hasattr(self, "model") and self.model is not None:
@@ -2217,10 +2243,18 @@ class LLM_AIMETOnnx(AIMETOnnxQuantizableMixin, LLMConfigEditor, BaseModel, ABC):
         return make_hub_dataset_entries(tuple(inputs), list(input_spec.keys()))
 
     def get_evaluator(
-        self, task: str = "wikitext", device: torch.device = torch.device("cpu")
+        self,
+        task: str = "wikitext",
+        device: torch.device = torch.device("cpu"),
+        **task_kwargs: Any,
     ) -> BaseEvaluator:
         return _get_evaluator(
-            task, self.context_length, self.sequence_length, self.tokenizer, device
+            task,
+            self.context_length,
+            self.sequence_length,
+            self.tokenizer,
+            device,
+            **task_kwargs,
         )
 
     get_eval_dataset_classes = LLMBase.get_eval_dataset_classes
@@ -2743,10 +2777,18 @@ class LLM_QNN(LLMConfigEditor, BaseModel, ABC):
         )
 
     def get_evaluator(
-        self, task: str = "wikitext", device: torch.device = torch.device("cpu")
+        self,
+        task: str = "wikitext",
+        device: torch.device = torch.device("cpu"),
+        **task_kwargs: Any,
     ) -> BaseEvaluator:
         return _get_evaluator(
-            task, self.context_length, self.sequence_length, self.tokenizer, device
+            task,
+            self.context_length,
+            self.sequence_length,
+            self.tokenizer,
+            device,
+            **task_kwargs,
         )
 
     get_eval_dataset_classes = LLMBase.get_eval_dataset_classes
