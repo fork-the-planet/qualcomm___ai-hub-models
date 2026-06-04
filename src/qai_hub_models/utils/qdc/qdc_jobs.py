@@ -8,7 +8,7 @@ import os
 import random
 import time
 import uuid
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from typing import TypeVar
 
 import qai_hub as hub
@@ -91,6 +91,36 @@ def _matched_retryable_status_code(err: Exception) -> int | None:
     return None
 
 
+# Note: We only have to do this hack because the QDC API re-throws as bare
+# exceptions. We have asked them not to do this (so revisit after 0.2.3)
+# https://jira-dc.qualcomm.com/jira/browse/QDC-5475
+def _unwrap_causes(err: BaseException) -> Iterator[BaseException]:
+    """Yield ``err`` and every exception in its __cause__/__context__ chain."""
+    seen: set[int] = set()
+    cur: BaseException | None = err
+    while cur is not None and id(cur) not in seen:
+        seen.add(id(cur))
+        yield cur
+        cur = cur.__cause__ or cur.__context__
+
+
+def _transient_network_error_name(err: Exception) -> str | None:
+    """Return the underlying transient-network error's type name, else None.
+
+    The QDC SDK's ``try_call`` flattens the real failure into a bare
+    ``Exception`` (``raise Exception(msg) from e``), so the network type is only
+    visible by walking the cause chain. DNS failures, for instance, surface as
+    ``socket.gaierror`` ("Temporary failure in name resolution") — an
+    ``OSError`` subclass — wrapped under httpx/httpcore ConnectError. We return
+    only the type name so callers can log it WITHOUT echoing the message, which
+    may carry server-reflected secrets or credential fragments.
+    """
+    for cause in _unwrap_causes(err):
+        if isinstance(cause, (OSError, ConnectionError, TimeoutError)):
+            return type(cause).__name__
+    return None
+
+
 def _backoff_seconds(attempt: int) -> int:
     """Exponential backoff (capped) for the given zero-based retry attempt."""
     return min(RETRY_BACKOFF_BASE * (2**attempt), RETRY_BACKOFF_MAX)
@@ -130,28 +160,27 @@ def _call_with_retry(
     for attempt in range(STATUS_POLL_MAX_RETRIES):
         try:
             return func()
-        except (OSError, ConnectionError, TimeoutError) as err:  # noqa: PERF203
-            if attempt == STATUS_POLL_MAX_RETRIES - 1:
-                raise
-            delay = _backoff_seconds(attempt)
-            # type(err).__name__ only — the message may carry sensitive details.
-            print(
-                f"[QDC retry] {description} failed with transient network error "
-                f"({err!r}); attempt {attempt + 1}/"
-                f"{STATUS_POLL_MAX_RETRIES}, retrying in {delay}s."
-            )
-            time.sleep(delay)
-        except Exception as err:
+        except Exception as err:  # noqa: PERF203
+            # The QDC SDK flattens the real failure into a bare Exception, so we
+            # must inspect both the cause chain (transient network errors like a
+            # DNS gaierror) and the message (embedded retryable status codes).
+            net_err = _transient_network_error_name(err)
             code = _matched_retryable_status_code(err)
-            if code is None or attempt == STATUS_POLL_MAX_RETRIES - 1:
+            if (net_err is None and code is None) or (
+                attempt == STATUS_POLL_MAX_RETRIES - 1
+            ):
                 raise
             delay = _backoff_seconds(attempt)
-            # Log only the matched status code, never the raw message, which the
-            # SDK may populate with credential fragments or reflected secrets.
+            # Log only the matched type/status code, never the raw message,
+            # which the SDK may populate with credential fragments or secrets.
+            reason = (
+                f"transient network error ({net_err})"
+                if net_err is not None
+                else f"transient status code {code}"
+            )
             print(
-                f"[QDC retry] {description} failed with transient status code "
-                f"{code}; attempt {attempt + 1}/{STATUS_POLL_MAX_RETRIES}, "
-                f"retrying in {delay}s."
+                f"[QDC retry] {description} failed with {reason}; attempt "
+                f"{attempt + 1}/{STATUS_POLL_MAX_RETRIES}, retrying in {delay}s."
             )
             time.sleep(delay)
     raise AssertionError("unreachable")  # loop either returns or raises
