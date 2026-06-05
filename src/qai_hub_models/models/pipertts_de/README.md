@@ -1,4 +1,4 @@
-# [PiperTTS-DE: High-quality text-to-speech library](https://aihub.qualcomm.com/models/pipertts_de)
+# [PiperTTS-DE: High-quality text-to-speech for German](https://aihub.qualcomm.com/models/pipertts_de)
 
 PiperTTS is a high-quality multi-lingual text-to-speech library.
 

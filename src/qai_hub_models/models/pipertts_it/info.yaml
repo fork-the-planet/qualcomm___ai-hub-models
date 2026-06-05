@@ -1,7 +1,7 @@
 name: PiperTTS-IT
 id: pipertts_it
 status: published
-headline: High-quality text-to-speech library.
+headline: High-quality text-to-speech for Italian.
 domain: Audio
 description: PiperTTS is a high-quality multi-lingual text-to-speech library.
 use_case: Audio Generation
