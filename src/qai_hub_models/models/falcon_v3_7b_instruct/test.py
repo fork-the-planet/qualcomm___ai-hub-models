@@ -125,9 +125,9 @@ def test_create_genie_config() -> None:
 @pytest.mark.parametrize(
     ("checkpoint", "task", "expected_metric", "num_samples"),
     [
-        ("DEFAULT_W4A16", "wikitext", 7.68, 0),
+        ("DEFAULT_W4A16", "wikitext", 7.65, 0),
         ("DEFAULT_W4A16", "mmlu", 0.714, 1000),
-        ("DEFAULT_UNQUANTIZED", "wikitext", 7.453, 0),
+        ("DEFAULT_UNQUANTIZED", "wikitext", 7.42, 0),
         ("DEFAULT_UNQUANTIZED", "tiny_mmlu", 0.68, 0),
     ],
 )

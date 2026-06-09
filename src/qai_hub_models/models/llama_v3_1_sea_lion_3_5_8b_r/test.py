@@ -232,8 +232,8 @@ def test_cli_default_device_select_component(
 @pytest.mark.parametrize(
     ("checkpoint", "task", "expected_metric", "num_samples"),
     [
-        ("DEFAULT_W4A16", "wikitext", 8.78, 30),
-        ("DEFAULT_UNQUANTIZED", "wikitext", 7.62, 0),
+        ("DEFAULT_W4A16", "wikitext", 8.99, 30),
+        ("DEFAULT_UNQUANTIZED", "wikitext", 7.59, 0),
     ],
 )
 def test_evaluate(

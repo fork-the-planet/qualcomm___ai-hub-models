@@ -221,9 +221,9 @@ def test_cli_default_device_select_component(
 @pytest.mark.parametrize(
     ("checkpoint", "task", "expected_metric", "num_samples"),
     [
-        ("DEFAULT_W4A16", "wikitext_ja", 7.564, 0),
+        ("DEFAULT_W4A16", "wikitext_ja", 7.54, 0),
         ("DEFAULT_W4A16", "mmmlu_ja", 0.496, 1000),
-        ("DEFAULT_UNQUANTIZED", "wikitext_ja", 6.508, 0),
+        ("DEFAULT_UNQUANTIZED", "wikitext_ja", 6.49, 0),
         ("DEFAULT_UNQUANTIZED", "mmmlu_ja", 0.54, 1000),
     ],
 )

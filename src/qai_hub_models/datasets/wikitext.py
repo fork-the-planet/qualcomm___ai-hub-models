@@ -5,8 +5,6 @@
 
 from __future__ import annotations
 
-import math
-
 import torch
 from datasets import Dataset, load_dataset
 from transformers import PreTrainedTokenizerBase
@@ -66,11 +64,11 @@ class WikiText(BaseDataset):
 
     def load_raw_dataset(self) -> Dataset:
         return load_dataset(
-            path="wikitext", name="wikitext-2-raw-v1", split=self.split_str
+            path="Salesforce/wikitext", name="wikitext-2-raw-v1", split=self.split_str
         )
 
     def __len__(self) -> int:
-        max_num = math.ceil(len(self.tokens["input_ids"][0]) / self.context_length)
+        max_num = len(self.tokens["input_ids"][0]) // self.context_length
         num = self.num_samples if self.num_samples != 0 else max_num
         return min(num, max_num)
 
@@ -94,7 +92,7 @@ class WikiText(BaseDataset):
     @staticmethod
     def get_dataset_metadata() -> DatasetMetadata:
         return DatasetMetadata(
-            link="https://huggingface.co/datasets/mindchain/wikitext2",
+            link="https://huggingface.co/datasets/Salesforce/wikitext",
             split_description="test split",
         )
 

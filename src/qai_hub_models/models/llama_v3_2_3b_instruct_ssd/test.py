@@ -261,9 +261,9 @@ def test_cli_device_with_skips_unsupported_context_length(tmp_path: Path) -> Non
 @pytest.mark.parametrize(
     ("checkpoint", "task", "expected_metric", "num_samples"),
     [
-        ("DEFAULT_W4A16", "wikitext", 11.998, 0),
+        ("DEFAULT_W4A16", "wikitext", 11.95, 0),
         ("DEFAULT_W4A16", "mmlu", 0.567, 1000),
-        ("DEFAULT_UNQUANTIZED", "wikitext", 10.165, 0),
+        ("DEFAULT_UNQUANTIZED", "wikitext", 10.14, 0),
         ("DEFAULT_UNQUANTIZED", "mmlu", 0.607, 1000),
     ],
 )
