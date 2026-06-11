@@ -31,7 +31,9 @@ def test_extract_tool_versions_from_compiled_model(
     m = MagicMock(
         spec=hub.Model,
         metadata={hub.ModelMetadataKey.QAIRT_SDK_VERSION: "2.28"},
-        producer=MagicMock(spec=hub.CompileJob, _job_type=JobType.COMPILE),
+    )
+    m.get_producer.return_value = MagicMock(
+        spec=hub.CompileJob, _job_type=JobType.COMPILE
     )
     assert ToolVersions.from_compiled_model(m, add_aihm_version=True) == ToolVersions(
         qairt=QAIRTVersion("2.28", validate_exists_on_ai_hub=False),
@@ -41,7 +43,9 @@ def test_extract_tool_versions_from_compiled_model(
     m = MagicMock(
         spec=hub.Model,
         metadata={hub.ModelMetadataKey.QNN_SDK_VERSION: "2.25.1234"},
-        producer=MagicMock(spec=hub.CompileJob, _job_type=JobType.COMPILE),
+    )
+    m.get_producer.return_value = MagicMock(
+        spec=hub.CompileJob, _job_type=JobType.COMPILE
     )
     assert ToolVersions.from_compiled_model(m, add_aihm_version=True) == ToolVersions(
         qairt=QAIRTVersion("2.25.1234", validate_exists_on_ai_hub=False),
@@ -51,8 +55,8 @@ def test_extract_tool_versions_from_compiled_model(
     m = MagicMock(
         spec=hub.Model,
         metadata={hub.ModelMetadataKey.QNN_SDK_VERSION: "2.25"},
-        producer=None,
     )
+    m.get_producer.return_value = None
     with pytest.raises(
         expected_exception=ValueError,
         match=r"Model must be compiled with AI Hub Workbench to extract tool versions\.",
@@ -81,8 +85,8 @@ def test_extract_tool_versions_from_compile_job(
     m = MagicMock(
         spec=hub.Model,
         metadata={hub.ModelMetadataKey.QNN_SDK_VERSION: "2.25.1234"},
-        producer=j,
     )
+    m.get_producer.return_value = j
     j.get_target_model = lambda: m
     assert ToolVersions.from_job(j, add_aihm_version=True) == ToolVersions(
         qairt=QAIRTVersion("2.25.1234", validate_exists_on_ai_hub=False),
@@ -99,8 +103,8 @@ def test_extract_tool_versions_from_compile_job(
     m = MagicMock(
         spec=hub.Model,
         metadata={hub.ModelMetadataKey.QNN_SDK_VERSION: "2.25.1234"},
-        producer=j,
     )
+    m.get_producer.return_value = j
     j.get_target_model = lambda: m
     assert ToolVersions.from_job(j, add_aihm_version=True) == ToolVersions(
         qairt=QAIRTVersion("2.25.1234", validate_exists_on_ai_hub=False),
@@ -175,7 +179,8 @@ def test_extract_tool_versions_from_compile_job(
         _owner=MagicMock(),
         job_id="0",
     )
-    m = MagicMock(spec=hub.Model, producer=j, metadata={})
+    m = MagicMock(spec=hub.Model, metadata={})
+    m.get_producer.return_value = j
     j.get_target_model = lambda: m
     with patch(
         RESULTS_PATCH_TARGET,
@@ -197,8 +202,8 @@ def test_extract_tool_versions_from_link_job(monkeypatch: pytest.MonkeyPatch) ->
     m = MagicMock(
         spec=hub.Model,
         metadata={hub.ModelMetadataKey.QNN_SDK_VERSION: "2.25.1234"},
-        producer=j,
     )
+    m.get_producer.return_value = j
     j.get_target_model = lambda: m
     assert ToolVersions.from_job(j, add_aihm_version=True) == ToolVersions(
         qairt=QAIRTVersion("2.25.1234", validate_exists_on_ai_hub=False),
@@ -215,8 +220,8 @@ def test_extract_tool_versions_from_link_job(monkeypatch: pytest.MonkeyPatch) ->
     m = MagicMock(
         spec=hub.Model,
         metadata={hub.ModelMetadataKey.QNN_SDK_VERSION: "2.25.1234"},
-        producer=jc,
     )
+    m.get_producer.return_value = jc
     j = MagicMock(
         spec=hub.LinkJob,
         _job_type=JobType.LINK,
@@ -233,8 +238,8 @@ def test_extract_tool_versions_from_link_job(monkeypatch: pytest.MonkeyPatch) ->
     m = MagicMock(
         spec=hub.Model,
         metadata={hub.ModelMetadataKey.QNN_SDK_VERSION: "2.25.1234"},
-        producer=None,
     )
+    m.get_producer.return_value = None
     j = MagicMock(
         spec=hub.LinkJob,
         _job_type=JobType.LINK,

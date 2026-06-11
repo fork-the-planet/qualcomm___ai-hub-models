@@ -1018,8 +1018,9 @@ def input_spec_from_cli_args(
     """
     if isinstance(model, OnDeviceModel):
         assert "eval_mode" in cli_args and cli_args.eval_mode == EvalMode.ON_DEVICE
-        assert isinstance(model.model.producer, hub.CompileJob)
-        return cast(InputSpec, model.model.producer.shapes)
+        producer = model.model.get_producer()
+        assert isinstance(producer, hub.CompileJob)
+        return cast(InputSpec, producer.shapes)
     return model.get_input_spec(**filter_kwargs(model.get_input_spec, vars(cli_args)))
 
 

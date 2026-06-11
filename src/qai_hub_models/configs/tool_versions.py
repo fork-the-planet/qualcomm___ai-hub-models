@@ -69,7 +69,8 @@ class ToolVersions(BaseQAIHMConfig):
         ValueError
             If the model was not compiled by AI Hub Workbench.
         """
-        if model.producer is None or model.producer._job_type not in [
+        producer = model.get_producer()
+        if producer is None or producer._job_type not in [
             JobType.COMPILE,
             JobType.LINK,
         ]:
@@ -87,9 +88,7 @@ class ToolVersions(BaseQAIHMConfig):
 
         # Get TF Lite, ONNX versions from the compile job
         if out.qairt is None:  # we don't need to do this if it's a QAIRT-compiled model
-            result = get_job_results(
-                model.producer._owner.config, model.producer.job_id
-            )
+            result = get_job_results(producer._owner.config, producer.job_id)
             for tool_version in result.compile_job_result.compile_detail.tool_versions:
                 if tool_version.name == "ONNX":
                     out.onnx = tool_version.version
@@ -164,7 +163,7 @@ class ToolVersions(BaseQAIHMConfig):
                 # Link jobs inherit their QAIRT version from input model files.
                 models = cast(hub.LinkJob, job).models
                 for model in models:
-                    if model.producer is not None:
+                    if model.get_producer() is not None:
                         return ToolVersions.from_compiled_model(
                             model, add_aihm_version=add_aihm_version
                         )

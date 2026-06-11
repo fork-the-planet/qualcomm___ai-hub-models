@@ -326,7 +326,7 @@ class ScorecardModelConfig(BaseQAIHMConfig):
                 return f"Model type {self.type} is not the same as type as model {model_id} ({model.model_type}) in AI Hub Workbench deployment {deployment}"
 
             # If the model was compiled with AI Hub Workbench, we have some additional I/O shape info accessible to validate with
-            if producer_job := model.producer:
+            if producer_job := model.get_producer():
                 assert isinstance(producer_job, CompileJob)
                 for input_name in self.channel_first_inputs:
                     if input_name not in producer_job.target_shapes:

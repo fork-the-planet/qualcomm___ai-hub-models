@@ -92,7 +92,7 @@ def main() -> None:
             )
             assert isinstance(compiled_model_list, list)
         for compiled_model in compiled_model_list:
-            if compiled_model.producer is None:
+            if compiled_model.get_producer() is None:
                 raise ValueError(
                     "Compiled models must be compiled with AI Hub Workbench; they cannot be uploaded manually."
                 )

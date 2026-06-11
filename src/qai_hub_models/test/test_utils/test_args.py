@@ -443,8 +443,9 @@ def test_demo_model_from_cli_args() -> None:
     validate_on_device_demo_args(args, RESNET_MODEL_ID)
 
     compile_mock = MagicMock(spec=hub.Model)
-    compile_mock.producer = MagicMock(spec=hub.CompileJob)
-    compile_mock.producer.options = ""
+    producer_mock = MagicMock(spec=hub.CompileJob)
+    producer_mock.options = ""
+    compile_mock.get_producer.return_value = producer_mock
     with patch(
         "qai_hub_models.utils.args.compile_model_from_args", return_value=compile_mock
     ):

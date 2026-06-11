@@ -289,23 +289,24 @@ class AsyncOnDeviceModel:
         # Determine whether I/O is channel last
         self.channel_last_input, self.channel_last_output = [], []
         compile_output_names = None
-        if isinstance(self.model.producer, (hub.CompileJob, hub.QuantizeJob)):
-            self.input_names = self.input_names or list(self.model.producer.shapes)
-        elif isinstance(self.model.producer, hub.LinkJob) and isinstance(
-            self.model.producer.models[0].producer, hub.CompileJob
+        producer = self.model.get_producer()
+        if isinstance(producer, (hub.CompileJob, hub.QuantizeJob)):
+            self.input_names = self.input_names or list(producer.shapes)
+        elif isinstance(producer, hub.LinkJob) and isinstance(
+            producer.models[0].get_producer(), hub.CompileJob
         ):
             self.input_names = self.input_names or list(
-                self.model.producer.models[0].producer.shapes
+                cast(hub.CompileJob, producer.models[0].get_producer()).shapes
             )
-        if isinstance(self.model.producer, (hub.CompileJob, hub.LinkJob)):
-            if isinstance(self.model.producer, hub.LinkJob) and isinstance(
-                self.model.producer.models[0].producer, hub.CompileJob
+        if isinstance(producer, (hub.CompileJob, hub.LinkJob)):
+            if isinstance(producer, hub.LinkJob) and isinstance(
+                producer.models[0].get_producer(), hub.CompileJob
             ):
                 compile_options = parse_compile_options(
-                    self.model.producer.models[0].producer
+                    cast(hub.CompileJob, producer.models[0].get_producer())
                 )
-            elif isinstance(self.model.producer, hub.CompileJob):
-                compile_options = parse_compile_options(self.model.producer)
+            elif isinstance(producer, hub.CompileJob):
+                compile_options = parse_compile_options(producer)
             self.channel_last_input = compile_options.channel_last_input or []
             self.channel_last_output = compile_options.channel_last_output or []
             compile_output_names = compile_options.output_names or []
@@ -361,30 +362,24 @@ class AsyncOnDeviceModel:
         OnDeviceModel will adapt channel-first pyTorch input to channel last. Thus
         channel-last shapes in AI Hub Workbench model will always be returned in channel-first format.
         """
-        if self.model.producer is None:
+        producer = self.model.get_producer()
+        if producer is None:
             raise ValueError(
                 "Unable to extract input shape from a model that was not compiled with AI Hub Workbench."
             )
-        if self.model.producer._job_type == hub.JobType.QUANTIZE:
-            return cast(InputSpec, cast(hub.QuantizeJob, self.model.producer).shapes)
-        if self.model.producer._job_type == hub.JobType.COMPILE:
-            out = cast(
-                InputSpec, cast(hub.CompileJob, self.model.producer).target_shapes
-            )
+        if producer._job_type == hub.JobType.QUANTIZE:
+            return cast(InputSpec, cast(hub.QuantizeJob, producer).shapes)
+        if producer._job_type == hub.JobType.COMPILE:
+            out = cast(InputSpec, cast(hub.CompileJob, producer).target_shapes)
             return transpose_channel_last_to_first_input_specs(
                 out, self.channel_last_input
             )
-        if self.model.producer._job_type == hub.JobType.LINK:
+        if producer._job_type == hub.JobType.LINK:
             out = cast(
                 InputSpec,
                 cast(
                     hub.CompileJob,
-                    cast(
-                        hub.LinkJob,
-                        self.model.producer,
-                    )
-                    .models[0]
-                    .producer,
+                    cast(hub.LinkJob, producer).models[0].get_producer(),
                 ).target_shapes,
             )
 
@@ -392,7 +387,7 @@ class AsyncOnDeviceModel:
                 out, self.channel_last_input
             )
         raise NotImplementedError(
-            f"Can't extract shapes from producer job of type {self.model.producer.job_type}"
+            f"Can't extract shapes from producer job of type {producer.job_type}"
         )
 
 

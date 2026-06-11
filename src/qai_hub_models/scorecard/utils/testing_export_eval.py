@@ -385,7 +385,7 @@ def patch_hub_with_cached_jobs(
     if quantize_future is not None:
         if quantize_jobs := quantize_future.result():
             pre_quantize_compile_jobs = [
-                cast(hub.CompileJob, component_job.job.model.producer)
+                cast(hub.CompileJob, component_job.job.model.get_producer())
                 for component_job in quantize_jobs
             ]
 
@@ -2205,8 +2205,9 @@ def sim_accuracy_on_dataset(
     num_samples = get_num_eval_samples(dataset_cls)
     quantized_hub_model = next(iter(quantize_jobs)).get_target_model()
     assert quantized_hub_model is not None
-    assert isinstance(quantized_hub_model.producer, (hub.QuantizeJob, hub.CompileJob))
-    input_spec = cast(InputSpec, quantized_hub_model.producer.shapes)
+    quantized_producer = quantized_hub_model.get_producer()
+    assert isinstance(quantized_producer, (hub.QuantizeJob, hub.CompileJob))
+    input_spec = cast(InputSpec, quantized_producer.shapes)
     with cache_path_patch:
         evaluate_result = evaluate_on_dataset(
             evaluator_func=model.get_evaluator,

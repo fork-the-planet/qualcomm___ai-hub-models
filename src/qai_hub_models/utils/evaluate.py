@@ -212,15 +212,16 @@ def get_qdq_onnx(model: hub.Model) -> hub.Model | None:
     qdq_model : hub.Model | None
         QDQ model, or None if not from a quantize job.
     """
-    if isinstance(model.producer, hub.QuantizeJob):
+    producer = model.get_producer()
+    if isinstance(producer, hub.QuantizeJob):
         return model
-    if not isinstance(model.producer, hub.CompileJob):
+    if not isinstance(producer, hub.CompileJob):
         return None
-    if not isinstance(model.producer.model, hub.Model):
+    if not isinstance(producer.model, hub.Model):
         return None
-    if not isinstance(model.producer.model.producer, hub.QuantizeJob):
+    if not isinstance(producer.model.get_producer(), hub.QuantizeJob):
         return None
-    return model.producer.model
+    return producer.model
 
 
 def _load_quant_cpu_onnx(model: hub.Model) -> OnnxModelTorchWrapper:

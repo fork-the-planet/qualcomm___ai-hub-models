@@ -82,7 +82,7 @@ def evaluate_model_accuracy(
             )
             continue
 
-        compile_job = job.job.model.producer
+        compile_job = job.job.model.get_producer()
         assert isinstance(compile_job, hub.CompileJob)
         compile_options = parse_compile_options(compile_job)
 
