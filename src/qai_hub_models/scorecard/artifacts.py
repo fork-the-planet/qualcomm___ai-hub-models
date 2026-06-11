@@ -20,6 +20,18 @@ ValT = TypeVar("ValT")
 
 INTERMEDIATES_DIR = QAIHM_PACKAGE_ROOT / "scorecard" / "intermediates"
 
+# Stage names recorded in model-runtime-estimates.yaml. Shared between
+# extract_model_runtimes (writer) and split_torch_models (reader); the
+# YAML schema breaks if these drift apart.
+RUNTIME_STAGE_JOB_SUBMISSION = "job_submission"
+RUNTIME_STAGE_EXPORT_TEST = "export_test"
+RUNTIME_STAGE_ACCURACY = "accuracy"
+RUNTIME_ALL_STAGES = (
+    RUNTIME_STAGE_JOB_SUBMISSION,
+    RUNTIME_STAGE_EXPORT_TEST,
+    RUNTIME_STAGE_ACCURACY,
+)
+
 
 def test_artifacts_dir() -> Path:
     """Get the path in which all test artifacts are stored."""
@@ -54,6 +66,7 @@ class ScorecardArtifact(Enum):
     RELEASE_ASSETS = "release-assets.yaml"
     DATASET_IDS = "dataset-ids.yaml"
     CPU_ACCURACY = "cpu-accuracy.yaml"
+    MODEL_RUNTIME_ESTIMATES = "model-runtime-estimates.yaml"
 
     def touch(self) -> Path:
         """Get the path for this test artifact. Will touch() the artifact if it does not exist."""

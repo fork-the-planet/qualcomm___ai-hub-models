@@ -8,9 +8,17 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import statistics
+from pathlib import Path
 from typing import Literal
 
+import ruamel.yaml
+
 from qai_hub_models.configs.code_gen_yaml import QAIHMModelCodeGen, TestRunnerSplit
+from qai_hub_models.scorecard.artifacts import (
+    RUNTIME_ALL_STAGES,
+    ScorecardArtifact,
+)
 from qai_hub_models.scorecard.envvars import EnabledModelsEnvvar
 from qai_hub_models.scorecard.static.list_models import (
     validate_and_split_enabled_models,
@@ -23,10 +31,145 @@ MAX_PT_MODELS_PER_SPLIT = 30
 RunsOnValue = dict[Literal["group", "labels"], str | list[str]] | None
 
 
+def _load_runtime_estimates(
+    yaml_path: Path | None = None,
+) -> dict[str, dict[str, float]]:
+    """Load per-model per-stage runtime estimates. Empty dict if missing/empty."""
+    if yaml_path is None:
+        yaml_path = ScorecardArtifact.MODEL_RUNTIME_ESTIMATES.intermediates_path
+    if not yaml_path.exists() or yaml_path.stat().st_size == 0:
+        return {}
+    with open(yaml_path) as f:
+        data = ruamel.yaml.YAML(typ="safe", pure=True).load(f) or {}
+    models = data.get("models") or {}
+    return {m: dict(v or {}) for m, v in models.items()}
+
+
+def _stage_time_for_model(
+    model_id: str,
+    stage: str,
+    estimates: dict[str, dict[str, float]],
+    median_time: float,
+) -> float:
+    """Look up the model's time for ``stage``, falling back to the median.
+
+    Models not present in the estimates file (newly added) and models
+    present but missing this specific stage both fall back to the
+    cross-model median for the stage. This keeps newly added models from
+    being scheduled as zero-cost.
+    """
+    return estimates.get(model_id, {}).get(stage, median_time)
+
+
+def _balance_lpt(
+    models: list[str],
+    weights: list[float],
+    num_splits: int,
+) -> list[list[str]]:
+    """Greedy longest-processing-time-first bin packing into ``num_splits`` bins.
+
+    Returns a list of ``num_splits`` lists. Each input model lands in
+    exactly one bin. The classic LPT heuristic gives a (4/3 - 1/3n)
+    approximation of the optimal makespan, which is plenty for our use
+    case where exact balance isn't necessary. Bin contents are returned
+    in insertion (descending-weight) order; callers reorder as needed.
+    """
+    if num_splits <= 0:
+        return []
+    bins: list[list[str]] = [[] for _ in range(num_splits)]
+    bin_loads = [0.0] * num_splits
+    # Sort by weight descending; tie-break alphabetically for determinism.
+    order = sorted(
+        range(len(models)),
+        key=lambda i: (-weights[i], models[i]),
+    )
+    for idx in order:
+        target = min(range(num_splits), key=lambda b: bin_loads[b])
+        bins[target].append(models[idx])
+        bin_loads[target] += weights[idx]
+    return bins
+
+
+def _balance_alphabetical(models: list[str], num_splits: int) -> list[list[str]]:
+    """Original split logic: even-sized alphabetical chunks."""
+    if num_splits <= 0:
+        return []
+    chunk = math.ceil(len(models) / num_splits)
+    out: list[list[str]] = []
+    for i in range(num_splits):
+        start = i * chunk
+        end = min(start + chunk, len(models))
+        out.append(models[start:end])
+    return out
+
+
+def _split_aot_jit(
+    aot_models: list[str],
+    jit_models: list[str],
+    num_splits: int,
+    stage: str | None,
+    estimates: dict[str, dict[str, float]],
+) -> list[list[str]]:
+    """Balance the union of AOT+JIT models, then sort AOT-first within each split.
+
+    The bin-packing happens once over all models (AOT and JIT together)
+    so per-split total runtime is balanced as well as the LPT heuristic
+    allows. Within each split, AOT models are listed first (alphabetical
+    within the AOT group, then alphabetical within the JIT group), so
+    long compiles kick off earlier in the pytest run.
+
+    When ``stage`` is None or no estimates are available for the stage,
+    falls back to alphabetical chunks for parity with the pre-balancing
+    behavior — split N gets chunk N of the AOT list followed by chunk N
+    of the JIT list.
+    """
+    if num_splits <= 0:
+        return []
+
+    median_time: float = 0.0
+    use_lpt = bool(stage and estimates)
+    if use_lpt:
+        # Median is computed over models that have a recorded value for
+        # this specific stage. If no model in either AOT or JIT has a
+        # recorded time for the stage, drop back to alphabetical.
+        recorded = [
+            v[stage] for v in estimates.values() if isinstance(v, dict) and stage in v
+        ]
+        if not recorded:
+            use_lpt = False
+        else:
+            median_time = statistics.median(recorded)
+
+    if use_lpt:
+        assert stage is not None  # narrowed by `use_lpt = bool(stage and estimates)`
+        all_models = aot_models + jit_models
+        weights = [
+            _stage_time_for_model(m, stage, estimates, median_time) for m in all_models
+        ]
+        bins = _balance_lpt(all_models, weights, num_splits)
+        # LPT mixes AOT and JIT into each bin in descending-weight order;
+        # resort each split so AOT models run first (alphabetical inside
+        # each group) to kick off long compiles early.
+        aot_set = set(aot_models)
+        return [
+            sorted(m for m in b if m in aot_set)
+            + sorted(m for m in b if m not in aot_set)
+            for b in bins
+        ]
+
+    # Fallback: alphabetical AOT chunk followed by alphabetical JIT
+    # chunk per split — already AOT-first by construction.
+    aot_bins = _balance_alphabetical(aot_models, num_splits)
+    jit_bins = _balance_alphabetical(jit_models, num_splits)
+    return [aot_bins[i] + jit_bins[i] for i in range(num_splits)]
+
+
 def split_torch_models(
     models: set,
     max_pt_splits: int | None = None,
     max_pt_models_per_split: int = MAX_PT_MODELS_PER_SPLIT,
+    stage: str | None = None,
+    runtime_estimates_path: Path | None = None,
 ) -> list[dict[str, str | RunsOnValue]]:
     """
     Split models into chunks for parallel processing.
@@ -45,6 +188,15 @@ def split_torch_models(
     max_pt_models_per_split
         Maximum number of models per default split when auto-calculating
         num_default_splits (does not include custom splits).
+    stage
+        If provided, balance splits using recorded runtimes for this
+        scorecard stage (one of ``job_submission``, ``export_test``,
+        ``accuracy``). When None, the runtime file is missing, or no
+        models have data for the stage, falls back to even-sized
+        alphabetical chunks (the historical behavior).
+    runtime_estimates_path
+        Optional override for the runtime estimates YAML location.
+        Defaults to the checked-in intermediates copy.
 
     Returns
     -------
@@ -101,23 +253,16 @@ def split_torch_models(
         if max_pt_splits is not None:
             num_default_splits = min(num_default_splits, max_pt_splits)
 
-        # Create splits by taking chunks of the JIT and AOT models separately, then combining them
         if num_default_splits > 0:
-            jit_split_size = math.ceil(len(all_models_jit) / num_default_splits)
-            aot_split_size = math.ceil(len(all_models_aot) / num_default_splits)
-            for i in range(num_default_splits):
-                jit_start_idx = i * jit_split_size
-                jit_end_idx = min((i + 1) * jit_split_size, len(all_models_jit))
-
-                aot_start_idx = i * aot_split_size
-                aot_end_idx = min((i + 1) * aot_split_size, len(all_models_aot))
-
-                jit_models_in_split = all_models_jit[jit_start_idx:jit_end_idx]
-                aot_models_in_split = all_models_aot[aot_start_idx:aot_end_idx]
-                models_in_split = (
-                    aot_models_in_split + jit_models_in_split
-                )  # AOT models first because they take longer to compile
-
+            estimates = _load_runtime_estimates(runtime_estimates_path) if stage else {}
+            balanced = _split_aot_jit(
+                all_models_aot,
+                all_models_jit,
+                num_default_splits,
+                stage,
+                estimates,
+            )
+            for i, models_in_split in enumerate(balanced):
                 if models_in_split:
                     splits.append(
                         {
@@ -156,6 +301,22 @@ def main() -> None:
         help=f"Maximum models per default split (does not include custom splits, default: {MAX_PT_MODELS_PER_SPLIT})",
     )
     parser.add_argument(
+        "--stage",
+        choices=RUNTIME_ALL_STAGES,
+        default=None,
+        help=(
+            "Scorecard stage to load-balance for. When set, splits are sized "
+            "by recorded per-model runtime for this stage instead of by count. "
+            "Falls back to alphabetical chunks if no runtime data is available."
+        ),
+    )
+    parser.add_argument(
+        "--runtime-estimates-path",
+        type=Path,
+        default=None,
+        help="Override path to model-runtime-estimates.yaml (default: checked-in intermediates copy).",
+    )
+    parser.add_argument(
         "--output-format",
         choices=["json", "github"],
         default="json",
@@ -164,7 +325,11 @@ def main() -> None:
 
     args = parser.parse_args()
     splits = split_torch_models(
-        args.models, args.max_num_pt_splits, args.max_models_per_pt_split
+        args.models,
+        args.max_num_pt_splits,
+        args.max_models_per_pt_split,
+        stage=args.stage,
+        runtime_estimates_path=args.runtime_estimates_path,
     )
     if args.output_format == "github":
         # Output as a single line JSON for GitHub Actions

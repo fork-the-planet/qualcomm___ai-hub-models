@@ -352,6 +352,19 @@ jobs:
           echo '${{ secrets.TETRASERVICE_PASSWORD }}' | sudo -S cp ${{ env.QAIHM_TEST_ARTIFACTS_DIR }}/results.csv ./tableau-scorecard-mountpoint/scorecard-accuracy.csv
           echo '${{ secrets.TETRASERVICE_PASSWORD }}' | sudo -S umount ./tableau-scorecard-mountpoint
 
+      - name: Refresh Model Runtime Estimates
+        id: refresh-runtime-estimates
+        if: ${{ !cancelled() && inputs.create_pr && inputs.tableau_branch_name == 'weekly-prod' && inputs.action_id != '' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ACTION_ID: ${{ inputs.action_id }}
+          REPO: ${{ github.repository }}
+        run: |
+          source "${{ env.VENV_PATH }}/bin/activate"
+          python -m qai_hub_models.scripts.extract_model_runtimes \
+            --action-id "$ACTION_ID" \
+            --repo "$REPO"
+
       - name: Run codegen and precommit
         if: ${{ !cancelled() && inputs.create_pr && (steps.create-perf-files.outcome == 'success' || steps.create-numerics-files.outcome == 'success' || steps.create-release-assets-files.outcome == 'success') }}
         run: |

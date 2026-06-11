@@ -42,7 +42,8 @@ jobs:
     name: Split Models
     runs-on: [tetra-ubuntu-2204, self-hosted]
     outputs:
-      matrix: ${{ steps.split.outputs.matrix }}
+      export_matrix: ${{ steps.split.outputs.export_matrix }}
+      accuracy_matrix: ${{ steps.split.outputs.accuracy_matrix }}
     steps:
       - uses: actions/checkout@v6
 
@@ -86,16 +87,16 @@ jobs:
         id: split
         run: |
           source "${{ env.VENV_PATH }}/bin/activate"
-          SPLIT_ARGS="--models ${{ steps.determine_models.outputs.models }} --max-models-per-pt-split ${{ inputs.max_models_per_split }}"
+          BASE_ARGS="--models ${{ steps.determine_models.outputs.models }} --max-models-per-pt-split ${{ inputs.max_models_per_split }}"
           if [[ "${{ inputs.max_num_splits }}" != "0" ]]; then
-            SPLIT_ARGS="$SPLIT_ARGS --max-num-pt-splits ${{ inputs.max_num_splits }}"
+            BASE_ARGS="$BASE_ARGS --max-num-pt-splits ${{ inputs.max_num_splits }}"
           fi
-          MATRIX=$(python -m qai_hub_models.scripts.split_torch_models $SPLIT_ARGS --output-format github)
-          echo "matrix=$MATRIX" >> "$GITHUB_OUTPUT"
-          NUM_SPLITS=$(echo "$MATRIX" | python -c "import sys, json; print(len(json.load(sys.stdin)))")
-          echo "num_splits=$NUM_SPLITS" >> "$GITHUB_OUTPUT"
-          echo "Splits: $MATRIX"
-          echo "Number of splits: $NUM_SPLITS"
+          EXPORT_MATRIX=$(python -m qai_hub_models.scripts.split_torch_models $BASE_ARGS --stage export_test --output-format github)
+          ACCURACY_MATRIX=$(python -m qai_hub_models.scripts.split_torch_models $BASE_ARGS --stage accuracy --output-format github)
+          echo "export_matrix=$EXPORT_MATRIX" >> "$GITHUB_OUTPUT"
+          echo "accuracy_matrix=$ACCURACY_MATRIX" >> "$GITHUB_OUTPUT"
+          echo "Export Splits: $EXPORT_MATRIX"
+          echo "Accuracy Splits: $ACCURACY_MATRIX"
 
   start_export_jobs:
     name: Test Exports (${{ matrix.split.split_name }})
@@ -103,7 +104,7 @@ jobs:
     secrets: inherit
     strategy:
       matrix:
-        split: ${{ fromJson(needs.split_models.outputs.matrix) }}
+        split: ${{ fromJson(needs.split_models.outputs.export_matrix) }}
       fail-fast: false
     uses: ./.github/workflows/scorecard_test_export_scripts.yml
     with:
@@ -119,7 +120,7 @@ jobs:
     secrets: inherit
     strategy:
       matrix:
-        split: ${{ fromJson(needs.split_models.outputs.matrix) }}
+        split: ${{ fromJson(needs.split_models.outputs.accuracy_matrix) }}
       fail-fast: false
     uses: ./.github/workflows/scorecard_compute_device_accuracy.yml
     with:

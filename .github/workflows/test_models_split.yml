@@ -100,7 +100,7 @@ jobs:
         id: split
         run: |
           source "${{ env.VENV_PATH }}/bin/activate"
-          SPLIT_ARGS="--models ${{ inputs.models }} --max-models-per-pt-split ${{ inputs.max_models_per_split }}"
+          SPLIT_ARGS="--models ${{ inputs.models }} --max-models-per-pt-split ${{ inputs.max_models_per_split }} --stage job_submission"
           if [[ "${{ inputs.max_num_splits }}" != "0" ]]; then
             SPLIT_ARGS="$SPLIT_ARGS --max-num-pt-splits ${{ inputs.max_num_splits }}"
           fi
