@@ -12,7 +12,7 @@ import tempfile
 import warnings
 from enum import Enum, unique
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Literal, TypeVar
+from typing import TYPE_CHECKING, Any, Literal, TypeVar, cast
 
 import torch
 from typing_extensions import Self
@@ -26,8 +26,13 @@ from qai_hub_models.utils.onnx.helpers import (
 )
 
 if TYPE_CHECKING:
-    # this import is only for the type-checker, never executed at runtime
+    # these imports are only for the type-checker, never executed at runtime.
+    # BaseModel must stay here (and is referenced only via a string forward-ref
+    # in cast): base_model.py imports CheckpointSpec from this module at runtime,
+    # so a top-level import would be circular.
     from transformers import PreTrainedModel
+
+    from qai_hub_models.utils.base_model import BaseModel
 
 
 CheckpointSpec = (
@@ -363,7 +368,12 @@ class FromPretrainedMixin:
             host_device=host_device,
         )
 
-        input_spec = cls.get_input_spec()  # type: ignore[attr-defined]
+        # Call on the instance (not cls) so this works whether the model defines
+        # get_input_spec/get_output_names as an instance method (e.g. pi05) or as a
+        # static/classmethod. Cast to BaseModel since these methods live there, not
+        # on torch.nn.Module (string forward-ref keeps the import type-check-only).
+        fp_model_typed = cast("BaseModel", fp_model)
+        input_spec = fp_model_typed.get_input_spec()
 
         example_input = tuple(make_torch_inputs(input_spec))
         example_input = tuple([t.to(host_device) for t in example_input])
@@ -377,7 +387,7 @@ class FromPretrainedMixin:
             example_input,
             os.path.join(tmpdir, "model.onnx"),
             input_names=list(input_spec.keys()),
-            output_names=cls.get_output_names(),  # type: ignore[attr-defined]
+            output_names=fp_model_typed.get_output_names(),
             **torch_to_onnx_options,
         )
         return ONNXBundle.from_bundle_path(tmpdir, ephemeral=True)

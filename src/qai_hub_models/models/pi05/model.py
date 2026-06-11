@@ -35,6 +35,7 @@ from qai_hub_models.models._shared.llm._utils import (
     _set_matmul_second_input_to_8b,
     _set_tensors_to_output_8b_sym,
 )
+from qai_hub_models.models.pi05.dataset import LiberoDataset
 from qai_hub_models.models.pi05.model_adaptation import (
     GemmaMLPSplitLinear,
     SHAGemmaExpertAttention,
@@ -43,6 +44,7 @@ from qai_hub_models.models.pi05.model_adaptation import (
 from qai_hub_models.utils.aimet.aimet_dummy_model import zip_aimet_model
 from qai_hub_models.utils.aimet.config_loader import get_aimet_config_path
 from qai_hub_models.utils.aimet.encodings import apply_propagate_memory_encodings
+from qai_hub_models.utils.base_dataset import BaseDataset
 from qai_hub_models.utils.base_model import (
     BaseModel,
     CollectionModel,
@@ -1840,11 +1842,38 @@ class Pi05ActionExpertQuantizable(
         )
 
 
+class _Pi05LiberoCalibrationMixin:
+    """Shared calibration-dataset hook for the Pi05 collections."""
+
+    def get_calibration_dataset_cls(self) -> type[BaseDataset]:
+        return LiberoDataset
+
+
+@CollectionModel.add_component(Pi05PaliGemmaVision, "vision_encoder")
+@CollectionModel.add_component(Pi05PaliGemmaTokenEmbed, "token_emb")
+@CollectionModel.add_component(Pi05ActionExpert, "action_expert")
+@CollectionModel.add_component(Pi05PaliGemmaBackbone, "backbone")
+class Pi05Collection(
+    _Pi05LiberoCalibrationMixin,
+    IndependentComponentFromPretrainedMixin,
+    PretrainedCollectionModel,
+):
+    """
+    Float (non-quantized) Pi05 collection. Its components are plain torch
+    modules that run float forward passes, so Pi05App.get_calibration_data can
+    invoke them directly to build calibration inputs for the quantizable
+    components. All components share the lru_cached policy from load_checkpoint,
+    so no duplicate float weights are materialized.
+    """
+
+
 @CollectionModel.add_component(Pi05PaliGemmaVisionQuantizable, "vision_encoder")
 @CollectionModel.add_component(Pi05PaliGemmaTokenEmbed, "token_emb")
 @CollectionModel.add_component(Pi05ActionExpertQuantizable, "action_expert")
 @CollectionModel.add_component(Pi05PaliGemmaBackboneQuantizable, "backbone")
 class Pi05CollectionQuantized(
-    IndependentComponentFromPretrainedMixin, PretrainedCollectionModel
+    _Pi05LiberoCalibrationMixin,
+    IndependentComponentFromPretrainedMixin,
+    PretrainedCollectionModel,
 ):
     pass

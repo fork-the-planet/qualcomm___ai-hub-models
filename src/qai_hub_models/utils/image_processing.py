@@ -360,6 +360,16 @@ def resize_pad(
     return rescaled_padded_image, scale, padding
 
 
+def resize_and_normalize(image: torch.Tensor) -> torch.Tensor:
+    """Resize with padding to 224x224 and normalize to [-1, 1]."""
+    if image.ndim == 3:
+        image = image.unsqueeze(0)
+    image, _, _ = resize_pad(
+        image, (224, 224), vertical_float="top", horizontal_float="left"
+    )
+    return image * 2.0 - 1.0
+
+
 def undo_resize_pad(
     image: torch.Tensor,
     orig_size_wh: tuple[int, int],

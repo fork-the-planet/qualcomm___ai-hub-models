@@ -26,6 +26,7 @@ from qai_hub_models.models.pi05.app import Pi05App
 from qai_hub_models.models.pi05.model import (
     MODEL_ID,
     Pi05ActionExpertQuantizable,
+    Pi05Collection,
     Pi05PaliGemmaBackboneQuantizable,
     Pi05PaliGemmaVisionQuantizable,
 )
@@ -105,8 +106,13 @@ def main() -> None:
         precision=precision,
     )
 
+    # Float collection whose components run float forward passes; used to build
+    # calibration inputs for the quantizable component above. Shares the
+    # lru_cached policy from load_checkpoint, so no duplicate float weights.
+    fp_collection = Pi05Collection.from_pretrained(host_device=host_device)
+
     ds = Pi05App.get_calibration_data(
-        None,  # type: ignore[arg-type]
+        fp_collection,
         args.component,
         num_samples=args.num_samples,
     )

@@ -4,32 +4,30 @@
 # ---------------------------------------------------------------------
 from __future__ import annotations
 
-import os
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, cast
 
 import numpy as np
 import torch
 from lerobot.configs.types import FeatureType
-from lerobot.datasets.lerobot_dataset import LeRobotDataset
 from lerobot.policies.pi05 import PI05Policy
-from lerobot.policies.pi05.configuration_pi05 import PI05Config
 from qai_hub.public_rest_api import DatasetEntries
+from torch.utils.data import DataLoader
 
+from qai_hub_models.datasets import DatasetSplit, instantiate_dataset
+from qai_hub_models.models.pi05.dataset import LiberoDataset
 from qai_hub_models.models.pi05.model import (
-    DEFAULT_CHECKPOINT,
     NUM_ACTION_STEPS,
     NUM_CAMERAS,
     Pi05ActionExpert,
     Pi05PaliGemmaBackbone,
     Pi05PaliGemmaTokenEmbed,
     Pi05PaliGemmaVision,
-    load_checkpoint,
 )
 from qai_hub_models.protocols import ExecutableModelProtocol
-from qai_hub_models.utils.asset_loaders import ASSET_CONFIG
 from qai_hub_models.utils.base_model import PretrainedCollectionModel
-from qai_hub_models.utils.image_processing import resize_pad
+from qai_hub_models.utils.evaluate import sample_dataset
+from qai_hub_models.utils.image_processing import resize_and_normalize
 from qai_hub_models.utils.inference import OnDeviceModel
 from qai_hub_models.utils.input_spec import InputSpec
 from qai_hub_models.utils.qai_hub_helpers import make_hub_dataset_entries
@@ -101,16 +99,6 @@ class BatchedOnDeviceModel:
 
     def __call__(self, *args: torch.Tensor) -> torch.Tensor | tuple[torch.Tensor, ...]:
         return self.model(*[_unbatch(t) for t in args])
-
-
-def resize_and_normalize(image: torch.Tensor) -> torch.Tensor:
-    """Resize with padding to 224x224 and normalize to [-1, 1]."""
-    if image.ndim == 3:
-        image = image.unsqueeze(0)
-    image, _, _ = resize_pad(
-        image, (224, 224), vertical_float="top", horizontal_float="left"
-    )
-    return image * 2.0 - 1.0
 
 
 class Pi05App(torch.nn.Module):
@@ -523,8 +511,6 @@ class Pi05App(torch.nn.Module):
 
         return x_t
 
-    # TODO: #19258: Pi0.5 calibration data should be available as a dataset
-
     @classmethod
     def get_calibration_data(
         cls,
@@ -533,121 +519,79 @@ class Pi05App(torch.nn.Module):
         input_specs: dict[str, InputSpec] | None = None,
         num_samples: int | None = None,
     ) -> DatasetEntries:
+        """
+        Build calibration data starting from the LIBERO dataset.
+
+        The dataset yields PI05-preprocessed, model-ready tensors (resized /
+        normalized camera images and tokenized language). Inputs for
+        downstream components (backbone, action_expert) are built on the fly
+        by running the upstream components, mirroring the easyocr pattern.
+
+        The upstream components are read from collection_model.components and
+        must be float torch modules (use the float Pi05Collection, not the
+        quantizable collection whose components are ONNX-wrapped).
+        """
         if component_name == "token_emb":
             raise NotImplementedError("token_emb is not quantized")
+        if component_name not in ("vision_encoder", "backbone", "action_expert"):
+            raise ValueError(
+                f"Unknown component_name={component_name!r}. "
+                "Expected one of: vision_encoder, token_emb, backbone, action_expert."
+            )
 
         if num_samples is None:
             num_samples = 100
 
+        # Build calibration data from the float collection's components, which
+        # are plain torch modules (unlike the quantizable collection, whose
+        # vision/backbone/action_expert components are ONNX-wrapped and cannot
+        # run a float forward). This mirrors easyocr's get_calibration_data.
+        calibration_dataset_cls = collection_model.get_calibration_dataset_cls()
+        assert calibration_dataset_cls is not None and issubclass(
+            calibration_dataset_cls, LiberoDataset
+        )
+        dataset = cast(
+            LiberoDataset,
+            instantiate_dataset(calibration_dataset_cls, DatasetSplit.TRAIN),
+        )
+        image_keys = dataset.image_keys
+        torch_dataset = sample_dataset(dataset, num_samples)
+        dataloader = DataLoader(torch_dataset, batch_size=1)
+
         if component_name == "vision_encoder":
-            return cls._calibration_data_vision_encoder(num_samples)
+            images: list[torch.Tensor | np.ndarray] = []
+            for sample, _ in dataloader:
+                images.append(sample[image_keys[0]].to(torch.float32))
+            return make_hub_dataset_entries((images,), ["image"])
+
+        # backbone / action_expert both need vision + token_emb run on the fly.
+        # Run on whatever device the components live on so calibration can use
+        # the GPU; inputs are moved to match.
+        vit = cast(Pi05PaliGemmaVision, collection_model.components["vision_encoder"])
+        token_emb = cast(
+            Pi05PaliGemmaTokenEmbed, collection_model.components["token_emb"]
+        )
+        vit.eval()
+        token_emb.eval()
+        device = next(token_emb.parameters()).device
+
         if component_name == "backbone":
-            return cls._calibration_data_backbone(num_samples)
-        if component_name == "action_expert":
-            return cls._calibration_data_action_expert(num_samples)
-        raise ValueError(
-            f"Unknown component_name={component_name!r}. "
-            "Expected one of: vision_encoder, token_emb, backbone, action_expert."
-        )
-
-    @classmethod
-    def _calibration_data_vision_encoder(cls, num_samples: int) -> DatasetEntries:
-        cache_path = ASSET_CONFIG.get_local_store_dataset_path(
-            "libero_vision_calib", "v1", f"data_n{num_samples}.pt"
-        )
-        if cache_path.exists():
-            data = torch.load(cache_path, weights_only=True)
-        else:
-            dataset = LeRobotDataset("HuggingFaceVLA/libero")
-            first_sample = dataset[0]
-            image_keys = sorted(
-                k for k in first_sample if k.startswith("observation.images.")
-            )
-
-            images: list[torch.Tensor] = []
-            for idx in range(min(num_samples, len(dataset))):
-                sample = dataset[idx] if idx > 0 else first_sample
-                img = sample[image_keys[0]]
-                if img.ndim == 3:
-                    img = img.unsqueeze(0)
-                img = resize_and_normalize(img.to(torch.float32))
-                images.append(img.squeeze(0))
-
-            data = torch.stack(images[:num_samples])
-            os.makedirs(cache_path.parent, exist_ok=True)
-            torch.save(data, cache_path)
-
-        return make_hub_dataset_entries(
-            (_unbatch(data),),
-            ["image"],
-        )
-
-    @classmethod
-    def _calibration_data_backbone(cls, num_samples: int) -> DatasetEntries:
-        cache_path = ASSET_CONFIG.get_local_store_dataset_path(
-            "libero_backbone_calib", "v1", f"data_n{num_samples}.pt"
-        )
-        if cache_path.exists():
-            data = torch.load(cache_path, weights_only=True)
-        else:
-            # Circular import: demo.py → pi05.__init__ → app.py
-            from qai_hub_models.models.pi05.demo import (
-                _build_preprocessed_batch,
-                _to_device_tree,
-            )
-
-            dataset = LeRobotDataset("HuggingFaceVLA/libero")
-            policy: PI05Policy = load_checkpoint(DEFAULT_CHECKPOINT)
-            pi05_config: PI05Config = policy.config
-
-            vit = Pi05PaliGemmaVision(policy).cpu().eval()
-            token_emb = Pi05PaliGemmaTokenEmbed(policy).cpu().eval()
-
-            image_keys = sorted(
-                k
-                for k, v in policy.model.config.input_features.items()
-                if v.type == FeatureType.VISUAL and "empty" not in k
-            )
-
-            hidden_states = []
-            att_masks = []
-            rope_sins = []
-            rope_coss = []
-
-            n = min(num_samples, len(dataset))
-            for idx in range(n):
-                raw_sample = dataset[idx]
-                raw_batch: dict = {}
-                for k, v in raw_sample.items():
-                    if isinstance(v, torch.Tensor):
-                        raw_batch[k] = v.unsqueeze(0)
-                    elif isinstance(v, str):
-                        raw_batch[k] = [v]
-                    else:
-                        raw_batch[k] = v
-
-                batch, _ = _build_preprocessed_batch(
-                    cfg=pi05_config,
-                    raw_batch=raw_batch,
-                    batch_size=1,
-                    dataset_stats=dataset.meta.stats,
+            input_names = [
+                "hidden_state",
+                "prefix_att_2d_masks",
+                "rope_emb_sin",
+                "rope_emb_cos",
+            ]
+            tensors_per_input: list[list[torch.Tensor | np.ndarray]] = [
+                [] for _ in input_names
+            ]
+            for sample, _ in dataloader:
+                lang_tokens = sample["observation.language.tokens"].to(device)
+                lang_mask = sample["observation.language.attention_mask"].to(
+                    device=device, dtype=torch.float32
                 )
-                batch = _to_device_tree(batch, "cpu")
-
-                lang_tokens = batch["observation.language.tokens"]
-                lang_mask = batch["observation.language.attention_mask"].to(
-                    torch.float32
-                )
-
                 with torch.no_grad():
-                    img_embeds = []
-                    for key in image_keys:
-                        img = batch[key]
-                        if img.ndim != 4:
-                            continue
-                        img = resize_and_normalize(img)
-                        img_embeds.append(vit(img))
-
+                    img_embeds = [vit(sample[key].to(device)) for key in image_keys]
                     (
                         prefix_emb,
                         prefix_att_2d,
@@ -657,158 +601,26 @@ class Pi05App(torch.nn.Module):
                         _suffix_cos,
                         _full_att_4d,
                     ) = token_emb(lang_tokens, lang_mask, *img_embeds)
+                tensors_per_input[0].append(prefix_emb)
+                tensors_per_input[1].append(prefix_att_2d)
+                tensors_per_input[2].append(prefix_sin)
+                tensors_per_input[3].append(prefix_cos)
+            return make_hub_dataset_entries(tuple(tensors_per_input), input_names)
 
-                hidden_states.append(prefix_emb[0])
-                att_masks.append(prefix_att_2d[0])
-                rope_sins.append(prefix_sin[0])
-                rope_coss.append(prefix_cos[0])
-
-            data = {
-                "hidden_state": torch.stack(hidden_states),
-                "prefix_att_2d_masks": torch.stack(att_masks),
-                "rope_emb_sin": torch.stack(rope_sins),
-                "rope_emb_cos": torch.stack(rope_coss),
-            }
-            os.makedirs(cache_path.parent, exist_ok=True)
-            torch.save(data, cache_path)
-
-        return make_hub_dataset_entries(
-            (
-                _unbatch(data["hidden_state"]),
-                _unbatch(data["prefix_att_2d_masks"]),
-                _unbatch(data["rope_emb_sin"]),
-                _unbatch(data["rope_emb_cos"]),
-            ),
-            ["hidden_state", "prefix_att_2d_mask", "rope_emb_sin", "rope_emb_cos"],
+        # action_expert: additionally run the backbone and Euler loop, expanding
+        # each sample into num_inference_steps calibration entries.
+        backbone_full = cast(
+            Pi05PaliGemmaBackbone, collection_model.components["backbone"]
         )
-
-    @classmethod
-    def _calibration_data_action_expert(cls, num_samples: int) -> DatasetEntries:
-        cache_path = ASSET_CONFIG.get_local_store_dataset_path(
-            "libero_action_expert_calib", "v1", f"data_n{num_samples}.pt"
+        action_expert = cast(
+            Pi05ActionExpert, collection_model.components["action_expert"]
         )
-        prefixes: list[dict[str, torch.Tensor]]
-        steps: list[tuple[int, torch.Tensor, torch.Tensor]]
-        if cache_path.exists():
-            raw = torch.load(cache_path, weights_only=True)
-            prefixes = raw["prefixes"]
-            steps = raw["steps"]
-        else:
-            # Circular import: demo.py → pi05.__init__ → app.py
-            from qai_hub_models.models.pi05.demo import (
-                _build_preprocessed_batch,
-                _to_device_tree,
-            )
-
-            dataset = LeRobotDataset("HuggingFaceVLA/libero")
-            policy: PI05Policy = load_checkpoint(DEFAULT_CHECKPOINT)
-            pi05_config: PI05Config = policy.config
-
-            vit = Pi05PaliGemmaVision(policy).cpu().eval()
-            token_emb = Pi05PaliGemmaTokenEmbed(policy).cpu().eval()
-            backbone_full = Pi05PaliGemmaBackbone(policy).cpu().eval()
-            action_expert = Pi05ActionExpert(policy).cpu().eval()
-
-            image_keys = sorted(
-                k
-                for k, v in policy.model.config.input_features.items()
-                if v.type == FeatureType.VISUAL and "empty" not in k
-            )
-
-            num_steps = int(getattr(pi05_config, "num_inference_steps", 10))
-            state_dim = 32
-
-            prefixes = []
-            steps = []
-
-            n = min(num_samples, len(dataset))
-            for idx in range(n):
-                raw_sample = dataset[idx]
-                raw_batch: dict = {}
-                for k, v in raw_sample.items():
-                    if isinstance(v, torch.Tensor):
-                        raw_batch[k] = v.unsqueeze(0)
-                    elif isinstance(v, str):
-                        raw_batch[k] = [v]
-                    else:
-                        raw_batch[k] = v
-
-                batch, _ = _build_preprocessed_batch(
-                    cfg=pi05_config,
-                    raw_batch=raw_batch,
-                    batch_size=1,
-                    dataset_stats=dataset.meta.stats,
-                )
-                batch = _to_device_tree(batch, "cpu")
-
-                lang_tokens = batch["observation.language.tokens"]
-                lang_mask = batch["observation.language.attention_mask"].to(
-                    torch.float32
-                )
-
-                with torch.no_grad():
-                    img_embeds = []
-                    for key in image_keys:
-                        img = batch[key]
-                        if img.ndim != 4:
-                            continue
-                        img = resize_and_normalize(img)
-                        img_embeds.append(vit(img))
-
-                    (
-                        prefix_emb,
-                        prefix_att_2d,
-                        prefix_sin,
-                        prefix_cos,
-                        suffix_sin,
-                        suffix_cos,
-                        full_att_4d,
-                    ) = token_emb(lang_tokens, lang_mask, *img_embeds)
-
-                    rest_full = backbone_full(
-                        prefix_emb, prefix_att_2d, prefix_sin, prefix_cos
-                    )
-                    n_full = len(rest_full) // 2
-                    k_caches = list(rest_full[:n_full])
-                    v_caches = list(rest_full[n_full:])
-
-                prefix: dict[str, torch.Tensor] = {
-                    "full_att_4d": full_att_4d[0],
-                    "rope_emb_sin": suffix_sin[0],
-                    "rope_emb_cos": suffix_cos[0],
-                }
-                for i in range(len(k_caches)):
-                    prefix[f"key_cache_l{i}"] = k_caches[i][0]
-                    prefix[f"value_cache_l{i}"] = v_caches[i][0]
-                ep_idx = len(prefixes)
-                prefixes.append(prefix)
-
-                x_t = torch.randn(1, NUM_ACTION_STEPS, state_dim)
-                dt = -1.0 / float(num_steps)
-                t_cur = 1.0
-                with torch.no_grad():
-                    for _ in range(num_steps):
-                        time_step = torch.tensor(t_cur)
-                        steps.append((ep_idx, x_t[0].clone(), time_step))
-
-                        kv_kwargs: dict[str, torch.Tensor] = {}
-                        for i in range(len(k_caches)):
-                            kv_kwargs[f"key_cache_l{i}"] = k_caches[i]
-                            kv_kwargs[f"value_cache_l{i}"] = v_caches[i]
-
-                        v_t = action_expert._compute_update(
-                            full_att_4d=full_att_4d,
-                            rope_emb_sin=suffix_sin,
-                            rope_emb_cos=suffix_cos,
-                            x_t=x_t,
-                            time_step=torch.tensor([t_cur]),
-                            **kv_kwargs,
-                        )
-                        x_t = x_t + dt * v_t
-                        t_cur += dt
-
-            os.makedirs(cache_path.parent, exist_ok=True)
-            torch.save({"prefixes": prefixes, "steps": steps}, cache_path)
+        backbone_full.eval()
+        action_expert.eval()
+        num_steps = action_expert.num_integration_steps
+        # state_dim is the action expert's x_t feature dim; read from its spec
+        # so this stays in sync if the model changes.
+        state_dim = action_expert.get_input_spec()["x_t"][0][2]
 
         input_names = [
             "full_att_4d",
@@ -819,22 +631,59 @@ class Pi05App(torch.nn.Module):
         ]
         input_names.extend(f"key_cache_l{i}" for i in range(18))
         input_names.extend(f"value_cache_l{i}" for i in range(18))
+        tensors_per_input = [[] for _ in input_names]
 
-        tensors_per_input: list[list[torch.Tensor | np.ndarray]] = [
-            [] for _ in input_names
-        ]
-        for ep_idx, x_t, time_step in steps:
-            prefix = prefixes[ep_idx]
-            tensors_per_input[0].append(prefix["full_att_4d"].unsqueeze(0))
-            tensors_per_input[1].append(prefix["rope_emb_sin"].unsqueeze(0))
-            tensors_per_input[2].append(prefix["rope_emb_cos"].unsqueeze(0))
-            tensors_per_input[3].append(x_t.unsqueeze(0))
-            tensors_per_input[4].append(time_step.unsqueeze(0))
-            for i in range(18):
-                tensors_per_input[5 + i].append(prefix[f"key_cache_l{i}"].unsqueeze(0))
-            for i in range(18):
-                tensors_per_input[23 + i].append(
-                    prefix[f"value_cache_l{i}"].unsqueeze(0)
+        for sample, _ in dataloader:
+            lang_tokens = sample["observation.language.tokens"].to(device)
+            lang_mask = sample["observation.language.attention_mask"].to(
+                device=device, dtype=torch.float32
+            )
+            with torch.no_grad():
+                img_embeds = [vit(sample[key].to(device)) for key in image_keys]
+                (
+                    prefix_emb,
+                    prefix_att_2d,
+                    prefix_sin,
+                    prefix_cos,
+                    suffix_sin,
+                    suffix_cos,
+                    full_att_4d,
+                ) = token_emb(lang_tokens, lang_mask, *img_embeds)
+
+                rest_full = backbone_full(
+                    prefix_emb, prefix_att_2d, prefix_sin, prefix_cos
                 )
+                n_full = len(rest_full) // 2
+                k_caches = list(rest_full[:n_full])
+                v_caches = list(rest_full[n_full:])
+
+                kv_kwargs: dict[str, torch.Tensor] = {}
+                for i in range(len(k_caches)):
+                    kv_kwargs[f"key_cache_l{i}"] = k_caches[i]
+                    kv_kwargs[f"value_cache_l{i}"] = v_caches[i]
+
+                x_t = torch.randn(1, NUM_ACTION_STEPS, state_dim, device=device)
+                dt = -1.0 / float(num_steps)
+                t_cur = 1.0
+                for _ in range(num_steps):
+                    tensors_per_input[0].append(full_att_4d)
+                    tensors_per_input[1].append(suffix_sin)
+                    tensors_per_input[2].append(suffix_cos)
+                    tensors_per_input[3].append(x_t.clone())
+                    tensors_per_input[4].append(torch.tensor([t_cur], device=device))
+                    for i in range(18):
+                        tensors_per_input[5 + i].append(k_caches[i])
+                        tensors_per_input[23 + i].append(v_caches[i])
+
+                    v_t = action_expert._compute_update(
+                        full_att_4d=full_att_4d,
+                        rope_emb_sin=suffix_sin,
+                        rope_emb_cos=suffix_cos,
+                        x_t=x_t,
+                        time_step=torch.tensor([t_cur], device=device),
+                        **kv_kwargs,
+                    )
+                    x_t = x_t + dt * v_t
+                    t_cur += dt
 
         return make_hub_dataset_entries(tuple(tensors_per_input), input_names)
