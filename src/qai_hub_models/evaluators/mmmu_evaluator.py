@@ -138,7 +138,10 @@ class MMMUEvaluator(LLMEvaluator):
         # Resolve image_token_id and the VEG device once; neither the vision
         # encoder nor its device changes across samples.
         image_token_id = None
-        if generator.is_vlm and generator.hf_repo_name is not None:
+        if (
+            getattr(generator, "vision_encoder", None) is not None
+            and generator.hf_repo_name is not None
+        ):
             config = AutoConfig.from_pretrained(
                 generator.hf_repo_name, trust_remote_code=True
             )

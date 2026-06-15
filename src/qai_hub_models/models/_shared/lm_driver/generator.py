@@ -262,10 +262,6 @@ class Generator(GenerationMixin, torch.nn.Module):
         return True
 
     @property
-    def is_vlm(self) -> bool:
-        return False
-
-    @property
     def config(self) -> PretrainedConfig:
         if self._config is not None:
             return self._config
@@ -1011,10 +1007,6 @@ class VLM_Generator(Generator):
             proc = getattr(self.sim_collection, "position_id_processor", None)
             if proc is not None:
                 self.position_id_processor = types.MethodType(proc, self)
-
-    @property
-    def is_vlm(self) -> bool:
-        return True
 
     @contextlib.contextmanager
     def visual_quantization_mode(self):

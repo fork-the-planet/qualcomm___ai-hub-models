@@ -359,10 +359,12 @@ class TaskLibrary:
     def download_qairt_auto_sdk(
         self, plan: Plan, step_id: str = "download_qairt_auto_sdk"
     ) -> str:
+        output_path = os.environ.get("QAIRT_SDK_PATH")
         return plan.add_step(
             step_id,
             DownloadQAIRTAutoSDKTask(
                 venv=self.venv_path,
+                output_path=output_path,
             ),
         )
 

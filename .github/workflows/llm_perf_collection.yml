@@ -153,6 +153,8 @@ jobs:
         hub-user-token-sandbox: ${{ secrets.HUB_USER_TOKEN_SANDBOX }}
 
     - name: Download QDC tools
+      env:
+        QAIRT_SDK_PATH: ${{ github.workspace }}/qairt_auto_sdk.zip
       run: |
         python3 scripts/build_and_test.py \
           --venv="${{ env.VENV_PATH }}" \

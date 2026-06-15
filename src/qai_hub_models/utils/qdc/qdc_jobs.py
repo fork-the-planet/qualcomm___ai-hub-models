@@ -40,6 +40,7 @@ HUB_DEVICE_TO_QDC_DEVICE_MAP = {
     "Snapdragon 8 Elite QRD": "SM8750",
     "Samsung Galaxy S25": "SM8750",
     "Snapdragon 8 Elite Gen 5 QRD": "SM8850",
+    "Samsung Galaxy S26": "SM8850",
     "SA8295P ADP": "SA8295P",
     "SA7255P ADP": "SA7255P",
     "SA8775P ADP": "QAM8775P",

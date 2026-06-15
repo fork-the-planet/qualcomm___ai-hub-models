@@ -39,7 +39,7 @@ runs:
         echo "KUBECONFIG=$KUBECONFIG" >> "$GITHUB_ENV"
 
     - name: Stop Argo workflows
-      if: ${{ !cancelled() }}
+      if: always()
       shell: bash
       env:
         RUNNER_IDS: ${{ inputs.runner-ids }}
@@ -54,7 +54,7 @@ runs:
         done
 
     - name: De-register runners from GitHub and clean up secrets
-      if: ${{ !cancelled() }}
+      if: always()
       shell: bash
       env:
         RUNNER_IDS: ${{ inputs.runner-ids }}

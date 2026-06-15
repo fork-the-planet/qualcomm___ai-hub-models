@@ -223,7 +223,10 @@ class LLMResponseEvaluator(LLMEvaluator):
 
         # Resolve image_token_id once for VLMs
         image_token_id: int | None = None
-        if generator.is_vlm and generator.hf_repo_name is not None:
+        if (
+            getattr(generator, "vision_encoder", None) is not None
+            and generator.hf_repo_name is not None
+        ):
             from transformers import AutoConfig
 
             cfg = AutoConfig.from_pretrained(

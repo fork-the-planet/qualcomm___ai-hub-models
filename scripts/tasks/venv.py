@@ -203,14 +203,18 @@ class DownloadQAIRTAutoSDKTask(RunCommandsWithVenvTask):
     def __init__(
         self,
         venv: str | None,
+        output_path: str | None = None,
         env: dict[str, str] | None = None,
         raise_on_failure: bool = True,
         ignore_return_codes: list[int] | None = None,
     ) -> None:
+        cmd = "python -m qai_hub_models.scripts.download_auto_qairt"
+        if output_path is not None:
+            cmd += f" --output {output_path}"
         super().__init__(
             "Download QAIRT Auto SDK",
             venv,
-            ["python -m qai_hub_models.scripts.download_auto_qairt"],
+            [cmd],
             env,
             raise_on_failure,
             ignore_return_codes or [],

@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 # ---------------------------------------------------------------------
 
+import argparse
 from pathlib import Path
 
 from qai_hub_models.utils.aws import (
@@ -23,7 +24,14 @@ def download_qairt_auto_sdk(local_path: str) -> None:
 
 
 def main() -> None:
-    download_qairt_auto_sdk(str(Path.home() / QAIRT_AUTO_SDK_FILENAME))
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--output",
+        default=str(Path.home() / QAIRT_AUTO_SDK_FILENAME),
+        help="Local path to write the downloaded SDK zip.",
+    )
+    args = parser.parse_args()
+    download_qairt_auto_sdk(args.output)
 
 
 if __name__ == "__main__":
