@@ -83,8 +83,10 @@ fi
 
 echo "Waiting for step '$WAIT_STEP' to be Running..." >&2
 
-MAX_ATTEMPTS=40
-for i in $(seq 1 $MAX_ATTEMPTS); do
+# Wait indefinitely for the pod to come online. GPU scheduling on a busy
+# cluster can take well over 20 minutes; we only give up if the workflow
+# itself enters a terminal Failed/Error state.
+while true; do
   WF_JSON=$(argo get "$SUBMITTED_WF" -n "$NAMESPACE" -o json 2>/dev/null || echo '{}')
   WF_STATUS=$(echo "$WF_JSON" | jq -r '.status.phase // empty')
 
@@ -100,9 +102,19 @@ for i in $(seq 1 $MAX_ATTEMPTS); do
 
   case "$STEP_PHASE" in
     Running)
-      echo "Step '$WAIT_STEP' is running!" >&2
-      echo "$SUBMITTED_WF"
-      exit 0
+      # Confirm an actual pod is Running, not just the Argo step node.
+      POD=$(kubectl get pods -n "$NAMESPACE" \
+        -l "workflows.argoproj.io/workflow=$SUBMITTED_WF" \
+        --field-selector=status.phase=Running \
+        -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}' 2>/dev/null \
+        | grep -v "resolve-user-identity" | head -1)
+      if [ -n "$POD" ]; then
+        echo "Step '$WAIT_STEP' is running (pod: $POD)!" >&2
+        echo "$SUBMITTED_WF"
+        exit 0
+      fi
+      echo "Step '$WAIT_STEP' Running but pod not yet up -- waiting..." >&2
+      sleep 30
       ;;
     Failed|Error)
       echo "Step '$WAIT_STEP' failed with phase: $STEP_PHASE" >&2
@@ -110,11 +122,8 @@ for i in $(seq 1 $MAX_ATTEMPTS); do
       exit 1
       ;;
     *)
-      echo "Attempt $i/$MAX_ATTEMPTS - step phase: ${STEP_PHASE} (workflow: ${WF_STATUS}) -- waiting..." >&2
+      echo "Step phase: ${STEP_PHASE} (workflow: ${WF_STATUS}) -- waiting..." >&2
       sleep 30
       ;;
   esac
 done
-
-echo "Step '$WAIT_STEP' did not reach Running within 20 minutes" >&2
-exit 1
