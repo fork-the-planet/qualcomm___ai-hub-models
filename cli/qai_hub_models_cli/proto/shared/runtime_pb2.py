@@ -18,7 +18,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x14shared/runtime.proto\x12\x05qaihm*\x9f\x02\n\x07Runtime\x12\x17\n\x13RUNTIME_UNSPECIFIED\x10\x00\x12\x12\n\x0eRUNTIME_TFLITE\x10\x01\x12\x13\n\x0fRUNTIME_QNN_DLC\x10\x02\x12\x1e\n\x1aRUNTIME_QNN_CONTEXT_BINARY\x10\x03\x12\x10\n\x0cRUNTIME_ONNX\x10\x04\x12 \n\x1cRUNTIME_PRECOMPILED_QNN_ONNX\x10\x05\x12\x11\n\rRUNTIME_GENIE\x10\x06\x12\x14\n\x10RUNTIME_VOICE_AI\x10\x07\"\x04\x08\x08\x10\x08\"\x04\x08\t\x10\t\"\x04\x08\n\x10\n*\x15RUNTIME_LLAMA_CPP_CPU*\x15RUNTIME_LLAMA_CPP_GPU*\x15RUNTIME_LLAMA_CPP_NPUb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x14shared/runtime.proto\x12\x05qaihm*\xb9\x02\n\x07Runtime\x12\x17\n\x13RUNTIME_UNSPECIFIED\x10\x00\x12\x12\n\x0eRUNTIME_TFLITE\x10\x01\x12\x13\n\x0fRUNTIME_QNN_DLC\x10\x02\x12\x1e\n\x1aRUNTIME_QNN_CONTEXT_BINARY\x10\x03\x12\x10\n\x0cRUNTIME_ONNX\x10\x04\x12 \n\x1cRUNTIME_PRECOMPILED_QNN_ONNX\x10\x05\x12\x11\n\rRUNTIME_GENIE\x10\x06\x12\x14\n\x10RUNTIME_VOICE_AI\x10\x07\x12\x18\n\x14RUNTIME_GENIEX_QAIRT\x10\x0b\"\x04\x08\x08\x10\x08\"\x04\x08\t\x10\t\"\x04\x08\n\x10\n*\x15RUNTIME_LLAMA_CPP_CPU*\x15RUNTIME_LLAMA_CPP_GPU*\x15RUNTIME_LLAMA_CPP_NPUb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -26,5 +26,5 @@ _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'shared.runtime_pb2', _globa
 if _descriptor._USE_C_DESCRIPTORS == False:
   DESCRIPTOR._options = None
   _globals['_RUNTIME']._serialized_start=32
-  _globals['_RUNTIME']._serialized_end=319
+  _globals['_RUNTIME']._serialized_end=345
 # @@protoc_insertion_point(module_scope)

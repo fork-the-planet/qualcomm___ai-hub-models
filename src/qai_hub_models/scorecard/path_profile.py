@@ -50,6 +50,7 @@ class ScorecardProfilePath(Enum, metaclass=ScorecardProfilePathMeta):
     ONNX = "onnx"
     PRECOMPILED_QNN_ONNX = "precompiled_qnn_onnx"
     GENIE = "genie"
+    GENIEX_QAIRT = "geniex_qairt"
     VOICE_AI = "voice_ai"
     ONNX_DML_GPU = "onnx_dml_gpu"
     QNN_DLC_GPU = "qnn_dlc_gpu"
@@ -82,6 +83,7 @@ class ScorecardProfilePath(Enum, metaclass=ScorecardProfilePathMeta):
             ScorecardProfilePath.QNN_DLC,
             ScorecardProfilePath.QNN_CONTEXT_BINARY,
             ScorecardProfilePath.GENIE,
+            ScorecardProfilePath.GENIEX_QAIRT,
             ScorecardProfilePath.VOICE_AI,
         ]
 
@@ -207,6 +209,8 @@ class ScorecardProfilePath(Enum, metaclass=ScorecardProfilePathMeta):
             return TargetRuntime.QNN_DLC
         if self == ScorecardProfilePath.GENIE:
             return TargetRuntime.GENIE
+        if self == ScorecardProfilePath.GENIEX_QAIRT:
+            return TargetRuntime.GENIEX_QAIRT
         if self == ScorecardProfilePath.VOICE_AI:
             return TargetRuntime.VOICE_AI
         assert_never(self)
@@ -232,6 +236,8 @@ class ScorecardProfilePath(Enum, metaclass=ScorecardProfilePathMeta):
             return ScorecardCompilePath.QNN_DLC_VIA_QNN_EP
         if self == ScorecardProfilePath.GENIE:
             return ScorecardCompilePath.GENIE
+        if self == ScorecardProfilePath.GENIEX_QAIRT:
+            return ScorecardCompilePath.GENIEX_QAIRT
         if self == ScorecardProfilePath.VOICE_AI:
             return ScorecardCompilePath.VOICE_AI
         assert_never(self)
@@ -295,6 +301,8 @@ class ScorecardProfilePath(Enum, metaclass=ScorecardProfilePathMeta):
             ScorecardProfilePath.VOICE_AI,
         ]:
             return self.value
+        if self in [ScorecardProfilePath.GENIEX_QAIRT, ScorecardProfilePath.GENIE]:
+            return ScorecardProfilePath.GENIE.value
         return self.runtime.inference_engine.value
 
 

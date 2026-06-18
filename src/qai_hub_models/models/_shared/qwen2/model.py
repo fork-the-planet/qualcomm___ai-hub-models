@@ -39,7 +39,7 @@ from transformers import PretrainedConfig, PreTrainedTokenizer
 from transformers.modeling_attn_mask_utils import AttentionMaskConverter
 from transformers.models.qwen2 import modeling_qwen2
 
-from qai_hub_models import Precision
+from qai_hub_models import Precision, TargetRuntime
 from qai_hub_models.models._shared.llama3.model import RopeEmbedding
 
 # todo change
@@ -249,6 +249,7 @@ class Qwen2Base_AIMETOnnx(LLM_AIMETOnnx):
         context_lengths: list[int],
         model_list: list[str],
         output_path: Path,
+        runtime: TargetRuntime,
         precision: Precision,
         encodings_path: str | os.PathLike | Path,
         input_specs: dict[str, Any],
@@ -263,6 +264,7 @@ class Qwen2Base_AIMETOnnx(LLM_AIMETOnnx):
             context_lengths,
             model_list,
             output_path,
+            runtime,
             precision,
             encodings_path,
             input_specs,

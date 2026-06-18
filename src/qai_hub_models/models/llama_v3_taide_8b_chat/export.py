@@ -25,6 +25,7 @@ DEFAULT_EXPORT_DEVICE = "Snapdragon 8 Elite QRD"
 SUPPORTED_PRECISION_RUNTIMES = {
     Precision.w4a16: [
         TargetRuntime.GENIE,
+        TargetRuntime.GENIEX_QAIRT,
     ],
 }
 

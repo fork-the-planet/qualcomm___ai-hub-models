@@ -689,6 +689,7 @@ def export_model(
                 context_lengths=context_lengths,
                 model_list=target_model_list,
                 output_path=output_path,
+                runtime=target_runtime,
                 precision=precision,
                 encodings_path=input_encodings_path,
                 input_specs=input_specs,

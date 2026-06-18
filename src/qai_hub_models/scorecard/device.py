@@ -482,8 +482,11 @@ class ScorecardDevice:
 
         # GENIE is built on top of QAIRT/QNN (compiles to --target_runtime qnn_dlc),
         # so any device with QNN support can run GENIE.
-        if supports_qnn and TargetRuntime.GENIE not in runtimes:
-            runtimes.append(TargetRuntime.GENIE)
+        if supports_qnn:
+            if TargetRuntime.GENIE not in runtimes:
+                runtimes.append(TargetRuntime.GENIE)
+            if TargetRuntime.GENIEX_QAIRT not in runtimes:
+                runtimes.append(TargetRuntime.GENIEX_QAIRT)
 
         if not supports_qnn:
             # No QNN support == QAIRT converters can't be used
@@ -507,6 +510,7 @@ class ScorecardDevice:
         if self._profile_paths is not None:
             return self._profile_paths
 
+        paths_to_test: list[ScorecardProfilePath] = []
         inference_engines_to_test: list[InferenceEngine] = []
         if (
             self.form_factor == ScorecardDevice.FormFactor.PHONE  # noqa: PLR1714 | Can't merge comparisons and use assert_never
@@ -518,20 +522,24 @@ class ScorecardDevice:
             inference_engines_to_test = [
                 InferenceEngine.QNN,
                 InferenceEngine.TFLITE,
-                InferenceEngine.GENIE,
             ]
+            paths_to_test.extend(
+                [ScorecardProfilePath.GENIE, ScorecardProfilePath.GENIEX_QAIRT]
+            )
         elif self.form_factor == ScorecardDevice.FormFactor.XR:
             inference_engines_to_test = [InferenceEngine.QNN, InferenceEngine.TFLITE]
         elif self.form_factor == ScorecardDevice.FormFactor.COMPUTE:
             inference_engines_to_test = [
                 InferenceEngine.QNN,
                 InferenceEngine.ONNX,
-                InferenceEngine.GENIE,
             ]
+            paths_to_test.extend(
+                [ScorecardProfilePath.GENIE, ScorecardProfilePath.GENIEX_QAIRT]
+            )
         else:
             assert_never(self.form_factor)
 
-        out = [
+        out = paths_to_test + [
             path
             for path in ScorecardProfilePath
             if path.runtime in self.supported_runtimes
@@ -618,8 +626,8 @@ cs_8_elite = ScorecardDevice(
 cs_8_elite_qrd = ScorecardDevice(
     name="cs_8_elite_qrd",
     reference_device_name="Snapdragon 8 Elite QRD",
-    compile_paths=[ScorecardCompilePath.GENIE],
-    profile_paths=[ScorecardProfilePath.GENIE],
+    compile_paths=[ScorecardCompilePath.GENIE, ScorecardCompilePath.GENIEX_QAIRT],
+    profile_paths=[ScorecardProfilePath.GENIE, ScorecardProfilePath.GENIEX_QAIRT],
 )
 
 cs_7_gen_4 = ScorecardDevice(
@@ -652,8 +660,8 @@ cs_x_elite = ScorecardDevice(
 cs_x_plus_8_core = ScorecardDevice(
     name="cs_x_plus_8_core",
     reference_device_name="Snapdragon X Plus 8-Core CRD",
-    compile_paths=[ScorecardCompilePath.GENIE],
-    profile_paths=[ScorecardProfilePath.GENIE],
+    compile_paths=[ScorecardCompilePath.GENIE, ScorecardCompilePath.GENIEX_QAIRT],
+    profile_paths=[ScorecardProfilePath.GENIE, ScorecardProfilePath.GENIEX_QAIRT],
 )
 
 cs_x2_elite = ScorecardDevice(

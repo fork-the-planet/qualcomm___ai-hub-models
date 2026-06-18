@@ -371,7 +371,6 @@ class InferenceEngine(Enum):
     TFLITE = "tflite"
     QNN = "qnn"
     ONNX = "onnx"
-    GENIE = "genie"
 
     @property
     def full_package_name(self) -> str:
@@ -381,8 +380,6 @@ class InferenceEngine(Enum):
             return "QAIRT (Qualcomm AI Runtime)"
         if self == InferenceEngine.ONNX:
             return "ONNX Runtime"
-        if self == InferenceEngine.GENIE:
-            return "Genie (Qualcomm GenAI Inference Extensions)"
         assert_never(self)
 
     @property
@@ -461,6 +458,9 @@ class TargetRuntime(Enum):
     # https://www.qualcomm.com/developer/software/gen-ai-inference-extensions
     GENIE = "genie"
 
+    # Qualcomm GenieX asset using QAIRT as the inference engine
+    GENIEX_QAIRT = "geniex_qairt"
+
     # Qualcomm Voice AI
     # https://www.qualcomm.com/products/features/voice-assist
     # https://qpm.qualcomm.com/#/main/tools/details/VoiceAI_ASR_Community
@@ -491,7 +491,9 @@ class TargetRuntime(Enum):
         ):
             return InferenceEngine.ONNX
         if self == TargetRuntime.GENIE:
-            return InferenceEngine.GENIE
+            return InferenceEngine.QNN
+        if self == TargetRuntime.GENIEX_QAIRT:
+            return InferenceEngine.QNN
         assert_never(self)
 
     @property
@@ -509,7 +511,8 @@ class TargetRuntime(Enum):
             return "onnx.zip"
         if self == TargetRuntime.GENIE:
             return "genie.zip"
-
+        if self == TargetRuntime.GENIEX_QAIRT:
+            return "geniex.zip"
         assert_never(self)
 
     @property
@@ -524,6 +527,8 @@ class TargetRuntime(Enum):
         if self == TargetRuntime.TFLITE:
             return hub.SourceModelType.TFLITE
         if self == TargetRuntime.GENIE:
+            raise ValueError(f"No Hub model type is applicable for {self.value}")
+        if self == TargetRuntime.GENIEX_QAIRT:
             raise ValueError(f"No Hub model type is applicable for {self.value}")
         assert_never(self)
 
@@ -583,6 +588,7 @@ class TargetRuntime(Enum):
             # so they support the same precision set as QAIRT paths
             or self == TargetRuntime.PRECOMPILED_QNN_ONNX
             or self == TargetRuntime.GENIE
+            or self == TargetRuntime.GENIEX_QAIRT
             or self == TargetRuntime.VOICE_AI
         ):
             return precision in [
@@ -635,6 +641,7 @@ class TargetRuntime(Enum):
             TargetRuntime.VOICE_AI,
             TargetRuntime.PRECOMPILED_QNN_ONNX,
             TargetRuntime.GENIE,
+            TargetRuntime.GENIEX_QAIRT,
         ]
 
     @property
@@ -655,6 +662,7 @@ class TargetRuntime(Enum):
         """
         return self in [
             TargetRuntime.GENIE,
+            TargetRuntime.GENIEX_QAIRT,
             TargetRuntime.VOICE_AI,
         ]
 

@@ -50,7 +50,7 @@ from transformers import (
 from transformers.modeling_attn_mask_utils import AttentionMaskConverter
 from transformers.models.llama import LlamaConfig, modeling_llama
 
-from qai_hub_models import Precision
+from qai_hub_models import Precision, TargetRuntime
 from qai_hub_models.configs.model_metadata import (
     OutputSpec,
 )
@@ -320,6 +320,7 @@ class Llama3Base_AIMETOnnx(LLM_AIMETOnnx):
         context_lengths: list[int],
         model_list: list[str],
         output_path: Path,
+        runtime: TargetRuntime,
         precision: Precision,
         encodings_path: str | os.PathLike | Path,
         input_specs: dict[str, Any],
@@ -334,6 +335,7 @@ class Llama3Base_AIMETOnnx(LLM_AIMETOnnx):
             context_lengths,
             model_list,
             output_path,
+            runtime,
             precision,
             encodings_path,
             input_specs,

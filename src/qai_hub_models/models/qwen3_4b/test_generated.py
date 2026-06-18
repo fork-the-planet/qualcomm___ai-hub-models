@@ -52,6 +52,7 @@ from qai_hub_models.utils.validation import perform_runtime_model_validation
 ENABLED_PRECISION_RUNTIMES: dict[Precision, list[TargetRuntime]] = {
     Precision.w4a16: [
         TargetRuntime.GENIE,
+        TargetRuntime.GENIEX_QAIRT,
     ],
 }
 
@@ -63,6 +64,7 @@ ENABLED_PRECISION_RUNTIMES: dict[Precision, list[TargetRuntime]] = {
 PASSING_PRECISION_RUNTIMES: dict[Precision, list[TargetRuntime]] = {
     Precision.w4a16: [
         TargetRuntime.GENIE,
+        TargetRuntime.GENIEX_QAIRT,
     ],
 }
 

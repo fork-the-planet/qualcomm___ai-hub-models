@@ -2756,7 +2756,7 @@ class LLM_AIMETOnnx(AIMETOnnxQuantizableMixin, LLMConfigEditor, BaseModel, ABC):
         device: Device | None = None,
         context_graph_name: str | None = None,
     ) -> str:
-        if target_runtime != TargetRuntime.GENIE:
+        if target_runtime not in [TargetRuntime.GENIE, TargetRuntime.GENIEX_QAIRT]:
             raise RuntimeError(
                 f"Unsupported target_runtime provided: {target_runtime}."
                 " Only Genie runtime is supported."
@@ -2888,6 +2888,7 @@ class LLM_AIMETOnnx(AIMETOnnxQuantizableMixin, LLMConfigEditor, BaseModel, ABC):
         context_lengths: list[int],
         model_list: list[str],
         output_path: Path,
+        runtime: TargetRuntime,
         precision: Precision,
         encodings_path: str | os.PathLike | Path,
         input_specs: dict[str, Any],
@@ -2922,7 +2923,7 @@ class LLM_AIMETOnnx(AIMETOnnxQuantizableMixin, LLMConfigEditor, BaseModel, ABC):
             model_id,
             model_name,
             precision,
-            TargetRuntime.GENIE,
+            runtime,
             encodings_path,
             input_specs,
             output_specs,

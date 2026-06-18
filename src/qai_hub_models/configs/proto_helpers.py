@@ -43,6 +43,7 @@ _RUNTIME_TO_PROTO: dict[str, int] = {
     "onnx": runtime_pb2.RUNTIME_ONNX,
     "precompiled_qnn_onnx": runtime_pb2.RUNTIME_PRECOMPILED_QNN_ONNX,
     "genie": runtime_pb2.RUNTIME_GENIE,
+    "geniex_qairt": runtime_pb2.RUNTIME_GENIEX_QAIRT,
     "voice_ai": runtime_pb2.RUNTIME_VOICE_AI,
 }
 

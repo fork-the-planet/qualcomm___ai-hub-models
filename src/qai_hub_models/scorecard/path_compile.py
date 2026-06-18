@@ -30,6 +30,7 @@ class ScorecardCompilePath(Enum):
     ONNX = "onnx"
     PRECOMPILED_QNN_ONNX = "precompiled_qnn_onnx"
     GENIE = "genie"
+    GENIEX_QAIRT = "geniex_qairt"
     VOICE_AI = "voice_ai"
 
     ONNX_FP16 = "onnx_fp16"
@@ -96,6 +97,8 @@ class ScorecardCompilePath(Enum):
             return TargetRuntime.QNN_DLC
         if self == ScorecardCompilePath.GENIE:
             return TargetRuntime.GENIE
+        if self == ScorecardCompilePath.GENIEX_QAIRT:
+            return TargetRuntime.GENIEX_QAIRT
         if self == ScorecardCompilePath.VOICE_AI:
             return TargetRuntime.VOICE_AI
         assert_never(self)

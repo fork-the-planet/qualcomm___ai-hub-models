@@ -515,6 +515,7 @@ def main() -> None:
     supported_precision_runtimes: dict[Precision, list[TargetRuntime]] = {
         Precision.w4a16: [
             TargetRuntime.GENIE,
+            TargetRuntime.GENIEX_QAIRT,
         ],
     }
 

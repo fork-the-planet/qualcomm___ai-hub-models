@@ -17,7 +17,7 @@ import numpy as np
 import qai_hub as hub
 import torch
 
-from qai_hub_models import Precision
+from qai_hub_models import Precision, TargetRuntime
 from qai_hub_models.models._shared.llm.model import LLM_AIMETOnnx, LLMBase
 
 with contextlib.suppress(ImportError):
@@ -181,6 +181,7 @@ class LLM_SSD_AIMETOnnx(LLM_AIMETOnnx):
         context_lengths: list[int],
         model_list: list[str],
         output_path: Path,
+        runtime: TargetRuntime,
         precision: Precision,
         encodings_path: str | os.PathLike | Path,
         input_specs: dict[str, Any],
@@ -195,6 +196,7 @@ class LLM_SSD_AIMETOnnx(LLM_AIMETOnnx):
             context_lengths,
             model_list,
             output_path,
+            runtime,
             precision,
             encodings_path,
             input_specs,
