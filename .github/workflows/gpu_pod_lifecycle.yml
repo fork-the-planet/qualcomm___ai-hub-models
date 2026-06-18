@@ -13,6 +13,11 @@ on:
         type: boolean
         default: false
 
+      force_kube:
+        description: Force routing through the kube ephemeral pod even if a -gpulv runner is online. Use to keep multiple parallel callers (e.g. nightly's 4 python versions) from queueing on a single GPU node.
+        type: boolean
+        default: false
+
       runner-id:
         type: string
         required: true
@@ -79,10 +84,11 @@ jobs:
     name: "Check GPU Node Availability"
     runs-on: [tetra-ubuntu-2204, self-hosted]
     outputs:
-      use_kube: ${{ steps.check.outputs.use_kube }}
+      use_kube: ${{ inputs.force_kube && 'true' || steps.check.outputs.use_kube }}
     steps:
       - uses: actions/checkout@v6
       - id: check
+        if: ${{ !inputs.force_kube }}
         uses: ./.github/actions/check-gpu-node
         with:
           pat-token: ${{ secrets.KUBE_GH_TOKEN }}
@@ -130,6 +136,7 @@ jobs:
       ignore_known_failures: ${{ inputs.ignore_known_failures }}
       split_name: ${{ inputs.split_name }}
       runs_on: ${{ needs.check_gpu_node.outputs.use_kube == 'true' && format('["{0}"]', inputs.runner-id) || toJson(fromJson('{"group":"GPU"}')) }}
+      is_gpu_node: ${{ needs.check_gpu_node.result == 'success' && needs.check_gpu_node.outputs.use_kube == 'false' }}
       sync_assets_branch: ${{ inputs.sync_assets_branch }}
       python_version: ${{ inputs.python_version }}
       disable_override_workbench_job_timeout: ${{ inputs.disable_override_workbench_job_timeout }}
@@ -260,6 +267,13 @@ jobs:
         source "${{ env.VENV_PATH }}/bin/activate"
         python -c 'import os, pandas as pd; print("## 🧪 Evaluate Results"); fn="test_evaluate.csv"; print(pd.read_csv(fn).to_markdown(index=False)) if os.path.exists(fn) else print(f"File {fn} not found.")' >> "$GITHUB_STEP_SUMMARY"
         python -c 'import os, pandas as pd; print("## 🖥️ On-device Results"); fn="test_perf_on_device.csv"; print(pd.read_csv(fn).to_markdown(index=False)) if os.path.exists(fn) else print(f"File {fn} not found.")' >> "$GITHUB_STEP_SUMMARY"
+
+    - name: Restore workspace ownership (GPU node only)
+      # The container ran as root; hand the workspace back to the
+      # unprivileged runner user so the next host-side job can unlink files.
+      if: ${{ always() && needs.check_gpu_node.outputs.use_kube == 'false' }}
+      run: |
+        chown -R 4552456:200 "$GITHUB_WORKSPACE" || true
 
   cleanup_runner:
     name: "Cleanup GPU Runner"

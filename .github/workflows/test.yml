@@ -62,6 +62,11 @@ on:
         default: false
         type: boolean
 
+      force_kube:
+        description: Force GPU model splits onto the kube ephemeral pod even if a -gpulv runner is online. Use to keep parallel callers (e.g. nightly's 4 python versions) from queueing on a single GPU node.
+        default: false
+        type: boolean
+
   workflow_dispatch:
     inputs:
       precommit_scope:
@@ -111,6 +116,11 @@ on:
 
       is_pr:
         description: Whether this run is for a pull request. Enables the check that fails the workflow if any prerequisite jobs failed.
+        default: false
+        type: boolean
+
+      force_kube:
+        description: Force GPU model splits onto the kube ephemeral pod even if a -gpulv runner is online.
         default: false
         type: boolean
 
@@ -312,6 +322,7 @@ jobs:
       max_num_splits: 4
       python_version: ${{ inputs.python_version }}
       disable_override_workbench_job_timeout: ${{ inputs.disable_override_workbench_job_timeout }}
+      force_kube: ${{ inputs.force_kube }}
 
   verify_model_tests:
     name: Verify Model Tests

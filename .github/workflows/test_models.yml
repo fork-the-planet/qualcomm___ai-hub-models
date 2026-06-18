@@ -67,6 +67,11 @@ on:
         description: JSON array of runner tags (e.g. '["tetra-ubuntu-2204", "self-hosted"]')
         type: string
 
+      is_gpu_node:
+        description: Whether the job is targeting a -gpulv self-hosted GPU node (vs. a kube ephemeral pod or tetra CPU runner).
+        type: boolean
+        default: false
+
 
 env:
   # Versions MUST be quoted, otherwise they will be interpreted as a floats
@@ -84,6 +89,9 @@ defaults:
 jobs:
   exec_scorecard:
     runs-on: ${{ inputs.runs_on && inputs.runs_on != 'null' && fromJson(inputs.runs_on) || fromJson('["tetra-ubuntu-2204", "self-hosted"]') }}
+    # On -gpulv nodes, containerize to match run_gpu_tests so writes don't
+    # leave host-side files the next job can't unlink.
+    container: ${{ inputs.is_gpu_node && fromJson('{"image":"docker-registry.qualcomm.com/library/nvidia/cuda:12.6.3-cudnn-devel-ubuntu22.04","options":"--gpus all -v /local:/local"}') || null }}
     timeout-minutes: 960 # 16 hours - job submission and CPU accuracy
     env:
       QAIHM_TEST_IGNORE_KNOWN_FAILURES: ${{ inputs.ignore_known_failures && '1' || '0' }}
@@ -106,32 +114,36 @@ jobs:
       packages: read
 
     steps:
-      - name: Setup GPU node environment
-        if: ${{ contains(runner.name, 'gpulv') }}
+      - name: Setup container environment (Kube/GPU node only)
+        if: ${{ !contains(runner.name, 'tetra') }}
         run: |
-          echo "HOME=/local/mnt2/workspace2/qaihm_bot" >> $GITHUB_ENV
-          echo "TMPDIR=/local/mnt2/workspace2/qaihm_bot/tmp" >> $GITHUB_ENV
-          echo "CUDA_VISIBLE_DEVICES=7" >> $GITHUB_ENV
-          groupadd -g 200 qaihm_bot_group || true
-          useradd -m -u 4552456 -g 200 -d /home/qaihm_bot -s /bin/bash qaihm_bot || true
-          mkdir -p /local/mnt2/workspace2/qaihm_bot/tmp
-          chown 4552456:200 /local/mnt2/workspace2/qaihm_bot/tmp
-
-      - name: Setup Kube pod environment
-        if: ${{ !contains(runner.name, 'tetra') && !contains(runner.name, 'gpulv') }}
-        run: |
-          # Hide any GPUs the Kube pod might accidentally see (we requested 0 GPUs)
-          echo "CUDA_VISIBLE_DEVICES=" >> $GITHUB_ENV
+          # GPU node container: create qaihm_bot user, pin to GPU 7, and
+          # persist HOME/TMPDIR on /local to match run_gpu_tests on the
+          # same -gpulv node.
+          # Kube pod: hide any GPUs we might accidentally see (we requested 0 GPUs).
+          if [ "${{ inputs.is_gpu_node }}" = "true" ]; then
+            groupadd -g 200 qaihm_bot_group || true
+            useradd -m -u 4552456 -g 200 -d /home/qaihm_bot -s /bin/bash qaihm_bot || true
+            echo "CUDA_VISIBLE_DEVICES=7" >> $GITHUB_ENV
+            echo "HOME=/local/mnt2/workspace2/qaihm_bot" >> $GITHUB_ENV
+            echo "TMPDIR=/local/mnt2/workspace2/qaihm_bot/tmp" >> $GITHUB_ENV
+            mkdir -p /local/mnt2/workspace2/qaihm_bot/tmp
+            chown 4552456:200 /local/mnt2/workspace2/qaihm_bot/tmp
+          else
+            echo "CUDA_VISIBLE_DEVICES=" >> $GITHUB_ENV
+          fi
 
       - name: Install git (Kube/container only)
-        if: ${{ !contains(runner.name, 'tetra') && !contains(runner.name, 'gpulv') }}
+        if: ${{ !contains(runner.name, 'tetra') }}
         run: |
-          if [ "$(id -u)" -eq 0 ]; then
-            apt-get update -qq
-            apt-get install -y -qq git
-          else
-            sudo apt-get update -qq
-            sudo apt-get install -y -qq git
+          if ! command -v git &>/dev/null; then
+            if [ "$(id -u)" -eq 0 ]; then
+              apt-get update -qq
+              apt-get install -y -qq git
+            else
+              sudo apt-get update -qq
+              sudo apt-get install -y -qq git
+            fi
           fi
 
       - uses: actions/checkout@v6
@@ -141,7 +153,7 @@ jobs:
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
 
       - name: Install system dependencies (Kube/container only)
-        if: ${{ !contains(runner.name, 'tetra') && !contains(runner.name, 'gpulv') }}
+        if: ${{ !contains(runner.name, 'tetra') }}
         run: bash src/qai_hub_models/scripts/kube/setup_pod.sh
 
       - name: Check Out Updated Static Asset Configs
@@ -352,3 +364,10 @@ jobs:
         with:
           name: ${{ inputs.test_scope == 'unit_and_compile' && format('Test Cached Artifact (Flaky-Job-IDs, {0}, py{1}{2})', github.run_id, inputs.python_version, inputs.split_name != '' && format(', {0}', inputs.split_name) || '') || format('Scorecard Cached Artifact (Flaky-Job-IDs, {0}{1})', github.run_id, inputs.split_name != '' && format(', {0}', inputs.split_name) || '') }}
           path: ${{ env.QAIHM_TEST_ARTIFACTS_DIR }}
+
+      - name: Restore workspace ownership (GPU node only)
+        # The container ran as root; hand the workspace back to the
+        # unprivileged runner user so the next host-side job can unlink files.
+        if: ${{ always() && inputs.is_gpu_node }}
+        run: |
+          chown -R 4552456:200 "$GITHUB_WORKSPACE" || true

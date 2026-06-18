@@ -74,6 +74,11 @@ on:
         default: false
         type: boolean
 
+      force_kube:
+        description: Force GPU splits onto the kube ephemeral pod even if a -gpulv runner is online.
+        default: false
+        type: boolean
+
 env:
   PYTHON_VERSION: ${{ inputs.python_version }}
   VENV_PATH: build/ci-envs/qaihm-build
@@ -165,6 +170,7 @@ jobs:
     uses: ./.github/workflows/gpu_pod_lifecycle.yml
     with:
       is_test_models: true
+      force_kube: ${{ inputs.force_kube }}
       runner-id: gpu-pr-${{ github.run_id }}-${{ github.run_attempt }}-py${{ inputs.python_version }}-${{ matrix.split.split_name }}
       gpu-request: '0'
       cpu-request: '8'
