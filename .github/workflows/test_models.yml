@@ -106,17 +106,16 @@ jobs:
       packages: read
 
     steps:
-      # TODO: re-enable GPU node fallback once availability check is stable.
-      # - name: Setup GPU node environment
-      #   if: ${{ contains(runner.name, 'gpulv') }}
-      #   run: |
-      #     echo "HOME=/local/mnt2/workspace2/qaihm_bot" >> $GITHUB_ENV
-      #     echo "TMPDIR=/local/mnt2/workspace2/qaihm_bot/tmp" >> $GITHUB_ENV
-      #     echo "CUDA_VISIBLE_DEVICES=7" >> $GITHUB_ENV
-      #     groupadd -g 200 qaihm_bot_group || true
-      #     useradd -m -u 4552456 -g 200 -d /home/qaihm_bot -s /bin/bash qaihm_bot || true
-      #     mkdir -p /local/mnt2/workspace2/qaihm_bot/tmp
-      #     chown 4552456:200 /local/mnt2/workspace2/qaihm_bot/tmp
+      - name: Setup GPU node environment
+        if: ${{ contains(runner.name, 'gpulv') }}
+        run: |
+          echo "HOME=/local/mnt2/workspace2/qaihm_bot" >> $GITHUB_ENV
+          echo "TMPDIR=/local/mnt2/workspace2/qaihm_bot/tmp" >> $GITHUB_ENV
+          echo "CUDA_VISIBLE_DEVICES=7" >> $GITHUB_ENV
+          groupadd -g 200 qaihm_bot_group || true
+          useradd -m -u 4552456 -g 200 -d /home/qaihm_bot -s /bin/bash qaihm_bot || true
+          mkdir -p /local/mnt2/workspace2/qaihm_bot/tmp
+          chown 4552456:200 /local/mnt2/workspace2/qaihm_bot/tmp
 
       - name: Setup Kube pod environment
         if: ${{ !contains(runner.name, 'tetra') && !contains(runner.name, 'gpulv') }}
@@ -125,7 +124,7 @@ jobs:
           echo "CUDA_VISIBLE_DEVICES=" >> $GITHUB_ENV
 
       - name: Install git (Kube/container only)
-        if: ${{ !contains(runner.name, 'tetra') }}
+        if: ${{ !contains(runner.name, 'tetra') && !contains(runner.name, 'gpulv') }}
         run: |
           if [ "$(id -u)" -eq 0 ]; then
             apt-get update -qq
@@ -142,7 +141,7 @@ jobs:
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
 
       - name: Install system dependencies (Kube/container only)
-        if: ${{ !contains(runner.name, 'tetra') }}
+        if: ${{ !contains(runner.name, 'tetra') && !contains(runner.name, 'gpulv') }}
         run: bash src/qai_hub_models/scripts/kube/setup_pod.sh
 
       - name: Check Out Updated Static Asset Configs

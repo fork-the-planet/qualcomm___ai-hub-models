@@ -249,10 +249,6 @@ def test_demo_default(
 
 
 @pytest.mark.nightly
-@pytest.mark.skipif(
-    not torch.cuda.is_available(),
-    reason="This test can be run on GPU only.",
-)
 @pytest.mark.parametrize(
     ("precision", "scorecard_path", "device", "checkpoint"),
     [
@@ -311,9 +307,8 @@ def test_compile(
 
 @pytest.mark.nightly
 @pytest.mark.skipif(
-    not torch.cuda.is_available()
-    or not importlib.util.find_spec("qualcomm_device_cloud_sdk"),
-    reason="This test can be run on GPU only. Also needs QDC package to run.",
+    not importlib.util.find_spec("qualcomm_device_cloud_sdk"),
+    reason="This test requires the qualcomm_device_cloud_sdk package.",
 )
 @pytest.mark.parametrize(
     ("precision", "scorecard_path", "device"),

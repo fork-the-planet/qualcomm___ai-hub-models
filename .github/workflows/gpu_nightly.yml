@@ -1,40 +1,70 @@
-##
-## QAI Hub Models GPU Nightly Tests
-##
-
 name: GPU Nightly
 run-name: "GPU Nightly (${{ inputs.deployment || 'prod' }}, ${{ inputs.models || 'all' }})"
 
 on:
-  # Allows this workflow to be manually triggered.
   workflow_dispatch:
     inputs:
       models:
-        description: Models to Run
-        required: false
         type: string
         default: all
-
       deployment:
-        description: Hub Deployment
-        default: prod
         type: string
-
-      use_kube:
-        description: Run on Kube cluster (false = use old GPU runner group)
-        type: boolean
-        default: true
-
+        default: prod
   schedule:
-    - cron: '0 2 * * 0,1,2,4,5,6' # Nightly: Every day except Tuesday 6pm PST (7pm PDT, Wednesday 2am UTC)
-
+    - cron: '0 2 * * 0,1,2,4,5,6'
 
 jobs:
   nightly:
-    uses: ./.github/workflows/gpu_weekly.yml
+    uses: ./.github/workflows/gpu_pod_lifecycle.yml
     with:
+      is_gpu_nightly: true
+      runner-id: gpu-nightly-${{ github.run_id }}-${{ github.run_attempt }}
+      gpu-request: '1'
+      memory-request: '512Gi'
       models: ${{ inputs.models || 'all' }}
       deployment: ${{ inputs.deployment || 'prod' }}
-      test_suite: nightly
-      use_kube: ${{ inputs.use_kube == null && true || inputs.use_kube }}
     secrets: inherit
+
+  notify_failure:
+    if: ${{ failure() && github.event_name == 'schedule' }}
+    name: Notify Failure
+    needs: nightly
+    runs-on: [tetra-ubuntu-2204, self-hosted]
+    permissions:
+      contents: read
+      issues: write
+      actions: read
+    steps:
+    - name: Create GitHub Issue
+      id: create-github-issue
+      uses: actions/github-script@v9
+      with:
+        github-token: ${{ secrets.STAGING_GH_TOKEN }}
+        script: |
+          const today = new Date().toISOString().split('T')[0];
+          const runUrl = '${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}/attempts/${{ github.run_attempt }}';
+
+          const result = await github.rest.issues.create({
+            owner: 'qcom-ai-hub',
+            repo: 'tetracode',
+            title: `GPU Nightly Tests Failed - ${today}`,
+            body: `[View Workflow Run](${runUrl})\n\nPlease assign the appropriate ML Tech Team member.\n\n📊 [Update the Nightly Failure Log spreadsheet](https://qualcomm.sharepoint.com/:x:/r/teams/TetraAI2/Shared%20Documents/model-zoo/QAIHM%20Nightly%20Failure%20Log.xlsx?d=w73cc2ddb0d7b4fe58a9a8ba9efc10fd8) (GPU tab)`,
+            labels: ['p0', 'ai-hub-models', 'gen-ai'],
+            assignees: ['shreyajn_QCOM']
+          });
+
+          core.setOutput('issue_url', result.data.html_url);
+
+    - name: Send Slack Notification
+      uses: slackapi/slack-github-action@v3
+      with:
+        method: chat.postMessage
+        token: ${{ secrets.SLACK_NOTIFIER_TOKEN }}
+        payload: |
+          channel: "C06UY9XU212"
+          text: |-
+            🚨 GPU Nightly Tests Failed
+
+            Workflow: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}/attempts/${{ github.run_attempt }}
+
+            GitHub Issue: ${{ steps.create-github-issue.outputs.issue_url }}

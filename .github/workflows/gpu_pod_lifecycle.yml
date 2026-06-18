@@ -1,0 +1,277 @@
+name: GPU Pod Lifecycle
+
+on:
+  workflow_call:
+    inputs:
+      is_gpu_weekly:
+        type: boolean
+        default: false
+      is_gpu_nightly:
+        type: boolean
+        default: false
+      is_test_models:
+        type: boolean
+        default: false
+
+      runner-id:
+        type: string
+        required: true
+      gpu-request:
+        type: string
+        default: '0'
+      cpu-request:
+        type: string
+        default: '8'
+      memory-request:
+        type: string
+        default: '256Gi'
+
+      deployment:
+        type: string
+        default: prod
+      models:
+        type: string
+        default: all
+      test_devices:
+        type: string
+        default: default
+      test_runtimes:
+        type: string
+        default: default
+      test_precisions:
+        type: string
+        default: default
+      qairt_version:
+        type: string
+        default: qaihm_default
+      test_scope:
+        type: string
+        default: perf
+      ignore_job_cache:
+        type: boolean
+        default: true
+      ignore_known_failures:
+        type: boolean
+        default: true
+      split_name:
+        type: string
+        default: ''
+      sync_assets_branch:
+        type: string
+        default: ''
+      python_version:
+        type: string
+        default: '3.10'
+      disable_override_workbench_job_timeout:
+        type: boolean
+        default: false
+
+env:
+  VENV_PATH: build/ci-envs/qaihm-build
+  QAIHM_CI: 1
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  check_gpu_node:
+    name: "Check GPU Node Availability"
+    runs-on: [tetra-ubuntu-2204, self-hosted]
+    outputs:
+      use_kube: ${{ steps.check.outputs.use_kube }}
+    steps:
+      - uses: actions/checkout@v6
+      - id: check
+        uses: ./.github/actions/check-gpu-node
+        with:
+          pat-token: ${{ secrets.KUBE_GH_TOKEN }}
+
+  start_runner:
+    name: "Start Ephemeral GPU Runner"
+    needs: check_gpu_node
+    if: ${{ needs.check_gpu_node.outputs.use_kube == 'true' }}
+    runs-on: [tetra-ubuntu-2204, self-hosted]
+    outputs:
+      runner-label: ${{ steps.start.outputs.runner-label }}
+    steps:
+      - uses: actions/checkout@v6
+      - id: start
+        uses: ./.github/actions/start-gpu-runner
+        with:
+          runner-id: ${{ inputs.runner-id }}
+          gpu-request: ${{ inputs.gpu-request }}
+          cpu-request: ${{ inputs.cpu-request }}
+          memory-request: ${{ inputs.memory-request }}
+          argo-namespace: "aihub-ci"
+          kubeconfig: ${{ secrets.KUBECONFIG }}
+          pat-token: ${{ secrets.KUBE_GH_TOKEN }}
+          sudo-password: ${{ secrets.TETRASERVICE_PASSWORD }}
+
+  run_test_models:
+    name: "Run test_models"
+    needs: [check_gpu_node, start_runner]
+    if: ${{ !cancelled() && inputs.is_test_models && needs.check_gpu_node.result == 'success' && (needs.start_runner.result == 'success' || needs.start_runner.result == 'skipped') }}
+    permissions:
+      contents: read
+      id-token: write
+      packages: read
+    secrets: inherit
+    uses: ./.github/workflows/test_models.yml
+    with:
+      deployment: ${{ inputs.deployment }}
+      models: ${{ inputs.models }}
+      test_devices: ${{ inputs.test_devices }}
+      test_runtimes: ${{ inputs.test_runtimes }}
+      test_precisions: ${{ inputs.test_precisions }}
+      qairt_version: ${{ inputs.qairt_version }}
+      test_scope: ${{ inputs.test_scope }}
+      ignore_job_cache: ${{ inputs.ignore_job_cache }}
+      ignore_known_failures: ${{ inputs.ignore_known_failures }}
+      split_name: ${{ inputs.split_name }}
+      runs_on: ${{ needs.check_gpu_node.outputs.use_kube == 'true' && format('["{0}"]', inputs.runner-id) || toJson(fromJson('{"group":"GPU"}')) }}
+      sync_assets_branch: ${{ inputs.sync_assets_branch }}
+      python_version: ${{ inputs.python_version }}
+      disable_override_workbench_job_timeout: ${{ inputs.disable_override_workbench_job_timeout }}
+
+  run_gpu_tests:
+    name: "Run GPU Tests"
+    needs: [check_gpu_node, start_runner]
+    if: ${{ !cancelled() && (inputs.is_gpu_weekly || inputs.is_gpu_nightly) && needs.check_gpu_node.result == 'success' && (needs.start_runner.result == 'success' || needs.start_runner.result == 'skipped') }}
+    runs-on: ${{ needs.check_gpu_node.outputs.use_kube == 'true' && fromJson(format('["{0}"]', inputs.runner-id)) || fromJson('{"group":"GPU"}') }}
+    container: ${{ needs.check_gpu_node.outputs.use_kube == 'false' && fromJson('{"image":"docker-registry.qualcomm.com/library/nvidia/cuda:12.6.3-cudnn-devel-ubuntu22.04","options":"--gpus all -v /local:/local"}') || null }}
+    timeout-minutes: 2160
+    permissions:
+      id-token: write
+      packages: read
+      contents: read
+    env:
+      TEST_SUITE: ${{ inputs.is_gpu_nightly && 'nightly' || 'weekly' }}
+      HF_TOKEN: ${{ secrets.HUGGINGFACE_TOKEN }}
+      QDC_API_TOKEN: ${{ secrets.QDC_API_KEY }}
+      QAIHM_JUNIT_XML_PATH: ${{ github.workspace }}/test-results/models-junit.xml
+      QAIHM_TEST_MODELS: ${{ inputs.models }}
+    steps:
+    - name: Setup user and environment (GPU node only)
+      if: ${{ needs.check_gpu_node.outputs.use_kube == 'false' }}
+      env:
+        DOCKER_USER_ID: 4552456
+        DOCKER_GROUP_ID: 200
+      run: |
+        groupadd -g $DOCKER_GROUP_ID qaihm_bot_group || true
+        useradd -m -u $DOCKER_USER_ID -g $DOCKER_GROUP_ID -d /home/qaihm_bot -s /bin/bash qaihm_bot || true
+        echo "HOME=/local/mnt2/workspace2/qaihm_bot" >> $GITHUB_ENV
+        echo "TMPDIR=/local/mnt2/workspace2/qaihm_bot/tmp" >> $GITHUB_ENV
+        echo "CUDA_VISIBLE_DEVICES=7" >> $GITHUB_ENV
+        mkdir -p /local/mnt2/workspace2/qaihm_bot/tmp
+        chown $DOCKER_USER_ID:$DOCKER_GROUP_ID /local/mnt2/workspace2/qaihm_bot/tmp
+
+    - name: Setup environment (kube only)
+      if: ${{ needs.check_gpu_node.outputs.use_kube == 'true' }}
+      run: |
+        # /scratch is the 256 GB volume; the root overlay fills first.
+        mkdir -p /scratch/qaihm/tmp /scratch/qaihm/.cache/huggingface
+        echo "HOME=/scratch/qaihm" >> $GITHUB_ENV
+        echo "TMPDIR=/scratch/qaihm/tmp" >> $GITHUB_ENV
+        echo "HF_HOME=/scratch/qaihm/.cache/huggingface" >> $GITHUB_ENV
+        echo "QAIHM_STORE_ROOT=/scratch/qaihm" >> $GITHUB_ENV
+
+    - name: Install git
+      run: |
+        if ! command -v git &>/dev/null; then
+          if [ "$(id -u)" -eq 0 ]; then
+            apt-get update -qq
+            apt-get install -y -qq git
+          else
+            sudo apt-get update -qq
+            sudo apt-get install -y -qq git
+          fi
+        fi
+
+    - uses: actions/checkout@v6
+      with:
+        fetch-depth: 0
+
+    - name: Install system dependencies
+      run: bash src/qai_hub_models/scripts/kube/setup_pod.sh
+
+    - name: CI Setup
+      uses: ./.github/actions/ci-setup
+      with:
+        python-version: USE_EXISTING_INSTALL
+        venv-path: ${{ env.VENV_PATH }}
+        hub-deployments: ${{ inputs.deployment }}
+        hub-user-token-prod: ${{ secrets.HUB_USER_TOKEN_PROD }}
+        hub-user-token-staging: ${{ secrets.HUB_USER_TOKEN_STAGING }}
+        hub-user-token-dev: ${{ secrets.HUB_USER_TOKEN_DEV }}
+        hub-user-token-sandbox: ${{ secrets.HUB_USER_TOKEN_SANDBOX }}
+
+    - name: Download QDC wheel
+      run: |
+        python3 scripts/build_and_test.py \
+          --venv="${{ env.VENV_PATH }}" \
+          --python="$(which python3)" \
+          download_qdc_wheel --only
+
+    - name: Install QDC
+      run: |
+        source ${{ env.VENV_PATH }}/bin/activate
+        pip install qualcomm_device_cloud_sdk-*.whl
+        pip uninstall -y onnxruntime
+
+    - name: Install LLM response grader venv
+      run: |
+        cd $GITHUB_WORKSPACE
+        python3 scripts/build_and_test.py \
+          --venv="$HOME/qaihm-dev-grader" \
+          install_llm_grader_requirements
+
+    - name: Install model specific dependencies and run tests
+      run: |
+        cd $GITHUB_WORKSPACE && \
+          python3 scripts/build_and_test.py \
+              --venv="${{ env.VENV_PATH }}" \
+              "test_gpu_models_${{ env.TEST_SUITE }}"
+
+    - name: Generate Test Failure Summary
+      if: always()
+      run: |
+        source "${{ env.VENV_PATH }}/bin/activate"
+        pip install six
+        python3 scripts/build_and_test.py --venv="${{ env.VENV_PATH }}" generate_test_summary
+
+    - name: Upload Test Results
+      if: always()
+      uses: actions/upload-artifact@v7
+      with:
+        name: test-results
+        path: ${{ github.workspace }}/test-results
+
+    - name: Upload CSV Results
+      if: always()
+      uses: actions/upload-artifact@v7
+      with:
+        name: pytest-results
+        path: ${{ github.workspace }}/*.csv
+
+    - name: Add CSV to GitHub summary
+      if: always()
+      run: |
+        source "${{ env.VENV_PATH }}/bin/activate"
+        python -c 'import os, pandas as pd; print("## 🧪 Evaluate Results"); fn="test_evaluate.csv"; print(pd.read_csv(fn).to_markdown(index=False)) if os.path.exists(fn) else print(f"File {fn} not found.")' >> "$GITHUB_STEP_SUMMARY"
+        python -c 'import os, pandas as pd; print("## 🖥️ On-device Results"); fn="test_perf_on_device.csv"; print(pd.read_csv(fn).to_markdown(index=False)) if os.path.exists(fn) else print(f"File {fn} not found.")' >> "$GITHUB_STEP_SUMMARY"
+
+  cleanup_runner:
+    name: "Cleanup GPU Runner"
+    needs: [check_gpu_node, start_runner, run_test_models, run_gpu_tests]
+    if: ${{ always() && needs.check_gpu_node.outputs.use_kube == 'true' && needs.start_runner.result == 'success' }}
+    runs-on: [tetra-ubuntu-2204, self-hosted]
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/stop-gpu-runner
+        with:
+          runner-ids: ${{ inputs.runner-id }}
+          argo-namespace: "aihub-ci"
+          kubeconfig: ${{ secrets.KUBECONFIG }}
+          pat-token: ${{ secrets.KUBE_GH_TOKEN }}
+          sudo-password: ${{ secrets.TETRASERVICE_PASSWORD }}

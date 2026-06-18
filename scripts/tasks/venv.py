@@ -8,6 +8,7 @@ from __future__ import annotations
 import functools
 import os
 import re
+import shlex
 import subprocess
 from collections.abc import Iterable
 
@@ -209,8 +210,8 @@ class DownloadQAIRTAutoSDKTask(RunCommandsWithVenvTask):
         ignore_return_codes: list[int] | None = None,
     ) -> None:
         cmd = "python -m qai_hub_models.scripts.download_auto_qairt"
-        if output_path is not None:
-            cmd += f" --output {output_path}"
+        if output_path:
+            cmd += f" --output {shlex.quote(output_path)}"
         super().__init__(
             "Download QAIRT Auto SDK",
             venv,

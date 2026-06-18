@@ -84,8 +84,10 @@ jobs:
     name: Split Models
     runs-on: [tetra-ubuntu-2204, self-hosted]
     outputs:
-      matrix: ${{ steps.split.outputs.matrix }}
-      needs_gpu_image: ${{ steps.split.outputs.needs_gpu_image }}
+      cpu_matrix: ${{ steps.split.outputs.cpu_matrix }}
+      gpu_matrix: ${{ steps.split.outputs.gpu_matrix }}
+      has_cpu_splits: ${{ steps.split.outputs.has_cpu_splits }}
+      has_gpu_splits: ${{ steps.split.outputs.has_gpu_splits }}
     steps:
       - uses: actions/checkout@v6
 
@@ -105,61 +107,22 @@ jobs:
             SPLIT_ARGS="$SPLIT_ARGS --max-num-pt-splits ${{ inputs.max_num_splits }}"
           fi
           MATRIX=$(python -m qai_hub_models.scripts.split_torch_models $SPLIT_ARGS --output-format github)
-          echo "matrix=$MATRIX" >> "$GITHUB_OUTPUT"
-          NUM_SPLITS=$(echo "$MATRIX" | python -c "import sys, json; print(len(json.load(sys.stdin)))")
-          echo "num_splits=$NUM_SPLITS" >> "$GITHUB_OUTPUT"
-          NEEDS_GPU=$(echo "$MATRIX" | python -c "import sys, json; splits=json.load(sys.stdin); print('true' if any((s.get('runs_on') or {}).get('group') == 'GPU' for s in splits) else 'false')")
-          echo "needs_gpu_image=$NEEDS_GPU" >> "$GITHUB_OUTPUT"
+          GPU_MATRIX=$(echo "$MATRIX" | python -c "import sys, json; splits=json.load(sys.stdin); print(json.dumps([s for s in splits if (s.get('runs_on') or {}).get('group') == 'GPU']))")
+          CPU_MATRIX=$(echo "$MATRIX" | python -c "import sys, json; splits=json.load(sys.stdin); print(json.dumps([s for s in splits if (s.get('runs_on') or {}).get('group') != 'GPU']))")
+          echo "cpu_matrix=$CPU_MATRIX" >> "$GITHUB_OUTPUT"
+          echo "gpu_matrix=$GPU_MATRIX" >> "$GITHUB_OUTPUT"
+          HAS_GPU=$(echo "$GPU_MATRIX" | python -c "import sys, json; print('true' if json.load(sys.stdin) else 'false')")
+          HAS_CPU=$(echo "$CPU_MATRIX" | python -c "import sys, json; print('true' if json.load(sys.stdin) else 'false')")
+          echo "has_gpu_splits=$HAS_GPU" >> "$GITHUB_OUTPUT"
+          echo "has_cpu_splits=$HAS_CPU" >> "$GITHUB_OUTPUT"
           echo "Splits: $MATRIX"
-          echo "Number of splits: $NUM_SPLITS"
-          echo "Needs GPU image: $NEEDS_GPU"
+          echo "GPU splits: $GPU_MATRIX"
+          echo "CPU splits: $CPU_MATRIX"
 
-  start_gpu_runner:
-    name: Start Ephemeral GPU Runner
-    needs: split_models
-    if: ${{ needs.split_models.outputs.needs_gpu_image == 'true' }}
-    runs-on: [tetra-ubuntu-2204, self-hosted]
-    outputs:
-      runner-label: ${{ steps.start.outputs.runner-label }}
-      used_kube: 'true'
-    steps:
-      - uses: actions/checkout@v6
-
-      # TODO: re-enable GPU node fallback once we have a stable check.
-      # Always use Kube for now.
-      # - name: Check GPU node availability
-      #   id: check
-      #   env:
-      #     PAT_TOKEN: ${{ secrets.KUBE_GH_TOKEN }}
-      #   run: |
-      #     RUNNERS=$(curl -s \
-      #       -H "Authorization: token $PAT_TOKEN" \
-      #       -H "Accept: application/vnd.github+json" \
-      #       "${{ github.api_url }}/repos/${{ github.repository }}/actions/runners?per_page=100")
-      #     GPU_ONLINE=$(echo "$RUNNERS" | jq '[.runners[] | select(.labels[].name == "GPU") | select(.status == "online") | select(.busy == false)] | length')
-      #     if [ "$GPU_ONLINE" -gt 0 ]; then
-      #       echo "use_kube=false" >> "$GITHUB_OUTPUT"
-      #     else
-      #       echo "use_kube=true" >> "$GITHUB_OUTPUT"
-      #     fi
-
-      - name: Start Kube runner
-        id: start
-        uses: ./.github/actions/start-gpu-runner
-        with:
-          runner-id: gpu-pr-${{ github.run_id }}-${{ github.run_attempt }}-py${{ inputs.python_version }}
-          gpu-request: "0"
-          cpu-request: "8"
-          memory-request: "256Gi"
-          argo-namespace: "aihub-ci"
-          kubeconfig: ${{ secrets.KUBECONFIG }}
-          pat-token: ${{ secrets.KUBE_GH_TOKEN }}
-          sudo-password: ${{ secrets.TETRASERVICE_PASSWORD }}
-
-  start_jobs:
+  start_cpu_jobs:
     name: Submit Jobs (${{ matrix.split.split_name }})
-    needs: [split_models, start_gpu_runner]
-    if: ${{ !cancelled() && needs.split_models.result == 'success' && (needs.start_gpu_runner.result == 'success' || needs.start_gpu_runner.result == 'skipped') }}
+    needs: split_models
+    if: ${{ !cancelled() && needs.split_models.result == 'success' && needs.split_models.outputs.has_cpu_splits == 'true' }}
     permissions:
       contents: read
       id-token: write
@@ -167,7 +130,7 @@ jobs:
     secrets: inherit
     strategy:
       matrix:
-        split: ${{ fromJson(needs.split_models.outputs.matrix) }}
+        split: ${{ fromJson(needs.split_models.outputs.cpu_matrix) }}
       fail-fast: false
     uses: ./.github/workflows/test_models.yml
     with:
@@ -181,14 +144,48 @@ jobs:
       ignore_job_cache: ${{ inputs.ignore_job_cache }}
       ignore_known_failures: ${{ inputs.ignore_known_failures }}
       split_name: ${{ matrix.split.split_name }}
-      runs_on: ${{ matrix.split.runs_on.group == 'GPU' && format('["{0}"]', needs.start_gpu_runner.outputs.runner-label) || toJson(matrix.split.runs_on) }}
+      runs_on: ${{ toJson(matrix.split.runs_on) }}
+      sync_assets_branch: ${{ inputs.sync_assets_branch }}
+      python_version: ${{ inputs.python_version }}
+      disable_override_workbench_job_timeout: ${{ inputs.disable_override_workbench_job_timeout }}
+
+  start_gpu_jobs:
+    name: Submit Jobs (${{ matrix.split.split_name }})
+    needs: split_models
+    if: ${{ !cancelled() && needs.split_models.result == 'success' && needs.split_models.outputs.has_gpu_splits == 'true' }}
+    permissions:
+      contents: read
+      id-token: write
+      packages: read
+    secrets: inherit
+    strategy:
+      matrix:
+        split: ${{ fromJson(needs.split_models.outputs.gpu_matrix) }}
+      fail-fast: false
+    uses: ./.github/workflows/gpu_pod_lifecycle.yml
+    with:
+      is_test_models: true
+      runner-id: gpu-pr-${{ github.run_id }}-${{ github.run_attempt }}-py${{ inputs.python_version }}-${{ matrix.split.split_name }}
+      gpu-request: '0'
+      cpu-request: '8'
+      memory-request: '256Gi'
+      deployment: ${{ inputs.deployment }}
+      models: ${{ matrix.split.models }}
+      test_devices: ${{ inputs.test_devices }}
+      test_runtimes: ${{ inputs.test_runtimes }}
+      test_precisions: ${{ inputs.test_precisions }}
+      qairt_version: ${{ inputs.qairt_version }}
+      test_scope: ${{ inputs.test_scope }}
+      ignore_job_cache: ${{ inputs.ignore_job_cache }}
+      ignore_known_failures: ${{ inputs.ignore_known_failures }}
+      split_name: ${{ matrix.split.split_name }}
       sync_assets_branch: ${{ inputs.sync_assets_branch }}
       python_version: ${{ inputs.python_version }}
       disable_override_workbench_job_timeout: ${{ inputs.disable_override_workbench_job_timeout }}
 
   combine_artifacts:
     name: Combine Split Artifacts
-    needs: [split_models, start_jobs]
+    needs: [split_models, start_cpu_jobs, start_gpu_jobs]
     if: ${{ !cancelled() && needs.split_models.result == 'success' }}
     runs-on: [tetra-ubuntu-2204, self-hosted]
     steps:
@@ -269,18 +266,3 @@ jobs:
             echo "Deleting artifact $artifact_id"
             gh api -X DELETE repos/${{ github.repository }}/actions/artifacts/$artifact_id || true
           done
-
-  cleanup_gpu_runner:
-    name: Cleanup GPU Runner
-    needs: [start_gpu_runner, start_jobs]
-    if: ${{ always() && needs.start_gpu_runner.outputs.used_kube == 'true' }}
-    runs-on: [tetra-ubuntu-2204, self-hosted]
-    steps:
-      - uses: actions/checkout@v6
-      - uses: ./.github/actions/stop-gpu-runner
-        with:
-          runner-ids: ${{ needs.start_gpu_runner.outputs.runner-label }}
-          argo-namespace: "aihub-ci"
-          kubeconfig: ${{ secrets.KUBECONFIG }}
-          pat-token: ${{ secrets.KUBE_GH_TOKEN }}
-          sudo-password: ${{ secrets.TETRASERVICE_PASSWORD }}

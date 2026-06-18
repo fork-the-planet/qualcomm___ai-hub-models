@@ -238,10 +238,6 @@ def test_demo_default(
 
 
 @pytest.mark.nightly
-@pytest.mark.skipif(
-    not torch.cuda.is_available(),
-    reason="This test can be run on GPU only.",
-)
 @pytest.mark.parametrize(
     ("precision", "scorecard_path", "device", "checkpoint"),
     [

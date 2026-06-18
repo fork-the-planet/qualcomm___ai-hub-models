@@ -162,15 +162,9 @@ class GPUPyTestModelsTask(CompositeTask):
                 and not check_code_gen_field(model_name, "skip_hub_tests_and_scorecard")
             ):
                 models_to_test.append(model_name)
-                # Only run llama_v2_7b_chat on weekly runs so nightly takes less time.
-                if not nightly_only and model_name == "llama_v2_7b_chat":
-                    models_to_test.append(model_name)
         if model_names != "all":
             requested = {m.strip() for m in model_names.split(",") if m.strip()}
             models_to_test = [m for m in models_to_test if m in requested]
-        # Run llama_v2_7b_chat last to avoid resource contention or conflicts with other models.
-        if "llama_v2_7b_chat" in models_to_test:
-            models_to_test.sort(key=lambda x: x == "llama_v2_7b_chat")
         tasks = []
         common_command = f"mkdir -p {tmp_dir}"
         for model_name in models_to_test:
@@ -185,9 +179,6 @@ class GPUPyTestModelsTask(CompositeTask):
                 test_suites.append("qdc")
             if run_demo:
                 test_suites.append("demo")
-            # Special case: llama_v2_7b_chat only has compile_ram_intensive tests.
-            if model_name == "llama_v2_7b_chat":
-                test_suites = ["compile_ram_intensive"]
 
             # When running nightly-only, skip models that have no nightly-marked tests.
             if nightly_only and not _model_has_nightly_tests(model_name):
@@ -270,11 +261,14 @@ class GPUPyTestModelsTask(CompositeTask):
                     )
                 )
 
-            # Remove the per-model venv after its tests complete to free disk space.
+            # Free disk between models: venv + HF cache + QAIHM store + TMPDIR.
             tasks.append(
                 RunCommandsTask(
-                    f"Remove Model Venv For {model_name}",
-                    f"rm -rf {model_venv}",
+                    f"Cleanup After Model {model_name}",
+                    f"rm -rf {model_venv}"
+                    f" {home_dir}/.cache/huggingface/hub/models--*"
+                    f" {home_dir}/.qaihm/models/*"
+                    f" {tmp_dir}/*",
                 )
             )
 
@@ -806,11 +800,14 @@ class CollectLLMPerfTask(CompositeTask):
                 )
             )
 
-            # Remove the per-model venv after tests complete to free disk space.
+            # Free disk between models: venv + HF cache + QAIHM store + TMPDIR.
             tasks.append(
                 RunCommandsTask(
-                    f"Remove Model Venv For {model_name}",
-                    f"rm -rf {model_venv}",
+                    f"Cleanup After Model {model_name}",
+                    f"rm -rf {model_venv}"
+                    f" {home_dir}/.cache/huggingface/hub/models--*"
+                    f" {home_dir}/.qaihm/models/*"
+                    f" {tmp_dir}/*",
                 )
             )
 

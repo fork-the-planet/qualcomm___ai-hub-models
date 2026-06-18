@@ -1,232 +1,50 @@
-##
-## QAI Hub Models GPU Weekly Tests
-##
-
 name: GPU Weekly
 run-name: "GPU Weekly (${{ inputs.deployment || 'prod' }}, ${{ inputs.models || 'all' }})"
 
-env:
-  TEST_SUITE: ${{ inputs.test_suite || 'weekly' }}
-  VENV_PATH: build/ci-envs/qaihm-build
-  QAIHM_CI: 1
-
 on:
-  # Allows this workflow to be callable
   workflow_call:
     inputs:
       models:
-        description: Models to Run
-        required: false
         type: string
         default: all
-
       deployment:
-        description: Hub Deployment
-        default: prod
         type: string
-
+        default: prod
       test_suite:
-        description: Test Suite to Run
-        required: false
         type: string
         default: weekly
-
-      use_kube:
-        description: Run on Kube cluster (false = use old GPU runner group)
-        type: boolean
-        required: false
-        default: false
-
-  # Allows this workflow to be manually triggered.
   workflow_dispatch:
     inputs:
       models:
-        description: Models to Run
-        required: false
         type: string
         default: all
-
       deployment:
-        description: Hub Deployment
-        default: prod
         type: string
-
-      use_kube:
-        description: Run on Kube cluster (false = use old GPU runner group)
-        type: boolean
-        default: false
-
-
+        default: prod
   schedule:
-    - cron: '0 2 * * 3' # Weekly: Tuesday at 6pm PST (7pm PDT) = Wednesday 2am UTC
-
-
-defaults:
-  run:
-    shell: bash
+    - cron: '0 2 * * 3' # Tuesday 6pm PST (Wednesday 2am UTC)
 
 jobs:
-  start_gpu_runner:
-    name: "Start Ephemeral GPU Runner"
-    if: ${{ inputs.use_kube }}
-    runs-on: [tetra-ubuntu-2204, self-hosted]
-    outputs:
-      runner-label: ${{ steps.start.outputs.runner-label }}
-    steps:
-    - uses: actions/checkout@v6
-    - id: start
-      uses: ./.github/actions/start-gpu-runner
-      with:
-        runner-id: gpu-weekly-${{ github.run_id }}-${{ github.run_attempt }}
-        gpu-request: "1"
-        cpu-request: "8"
-        memory-request: "512Gi"
-        argo-namespace: "aihub-ci"
-        kubeconfig: ${{ secrets.KUBECONFIG }}
-        pat-token: ${{ secrets.KUBE_GH_TOKEN }}
-        sudo-password: ${{ secrets.TETRASERVICE_PASSWORD }}
-
-  run_tests:
-    name: "Run GPU Tests"
-    needs: start_gpu_runner
-    if: ${{ !cancelled() && (needs.start_gpu_runner.result == 'success' || needs.start_gpu_runner.result == 'skipped') }}
-    runs-on: ${{ inputs.use_kube && needs.start_gpu_runner.outputs.runner-label || fromJson('{"group":"GPU"}') }}
-    container: ${{ !inputs.use_kube && fromJson('{"image":"docker-registry.qualcomm.com/library/nvidia/cuda:12.6.3-cudnn-devel-ubuntu22.04","options":"--gpus all -v /local:/local"}') || null }}
-    timeout-minutes: 2160 # 1.5 days (36 hours)
-    permissions:
-      id-token: write
-      packages: read
-      contents: read
-    env:
-      HF_TOKEN: ${{ secrets.HUGGINGFACE_TOKEN }}
-      QDC_API_TOKEN: ${{ secrets.QDC_API_KEY }}
-      QAIHM_JUNIT_XML_PATH: ${{ github.workspace }}/test-results/models-junit.xml
-      QAIHM_TEST_MODELS: ${{ inputs.models || 'all' }}
-    steps:
-    - name: Setup user and environment (GPU node only)
-      if: ${{ !inputs.use_kube }}
-      env:
-        DOCKER_USER_ID: 4552456
-        DOCKER_GROUP_ID: 200
-      run: |
-        groupadd -g $DOCKER_GROUP_ID qaihm_bot_group || true
-        useradd -m -u $DOCKER_USER_ID -g $DOCKER_GROUP_ID -d /home/qaihm_bot -s /bin/bash qaihm_bot || true
-        echo "HOME=/local/mnt2/workspace2/qaihm_bot" >> $GITHUB_ENV
-        echo "TMPDIR=/local/mnt2/workspace2/qaihm_bot/tmp" >> $GITHUB_ENV
-        echo "CUDA_VISIBLE_DEVICES=7" >> $GITHUB_ENV
-        mkdir -p /local/mnt2/workspace2/qaihm_bot/tmp
-        chown $DOCKER_USER_ID:$DOCKER_GROUP_ID /local/mnt2/workspace2/qaihm_bot/tmp
-
-    - name: Install git
-      run: |
-        if ! command -v git &>/dev/null; then
-          if [ "$(id -u)" -eq 0 ]; then
-            apt-get update -qq
-            apt-get install -y -qq git
-          else
-            sudo apt-get update -qq
-            sudo apt-get install -y -qq git
-          fi
-        fi
-
-    - uses: actions/checkout@v6
-      with:
-        fetch-depth: 0
-
-    - name: Install system dependencies
-      run: bash src/qai_hub_models/scripts/kube/setup_pod.sh
-
-    - name: CI Setup
-      uses: ./.github/actions/ci-setup
-      with:
-        python-version: USE_EXISTING_INSTALL
-        venv-path: ${{ env.VENV_PATH }}
-        hub-deployments: ${{ inputs.deployment || 'prod' }}
-        hub-user-token-prod: ${{ secrets.HUB_USER_TOKEN_PROD }}
-        hub-user-token-staging: ${{ secrets.HUB_USER_TOKEN_STAGING }}
-        hub-user-token-dev: ${{ secrets.HUB_USER_TOKEN_DEV }}
-        hub-user-token-sandbox: ${{ secrets.HUB_USER_TOKEN_SANDBOX }}
-
-    - name: Download QDC wheel
-      run: |
-        python3 scripts/build_and_test.py \
-          --venv="${{ env.VENV_PATH }}" \
-          --python="$(which python3)" \
-          download_qdc_wheel --only
-
-    - name: Install QDC
-      run: |
-        source ${{ env.VENV_PATH }}/bin/activate
-        pip install qualcomm_device_cloud_sdk-*.whl
-        pip uninstall -y onnxruntime
-
-    - name: Install LLM response grader venv
-      run: |
-        cd $GITHUB_WORKSPACE
-        python3 scripts/build_and_test.py \
-          --venv="$HOME/qaihm-dev-grader" \
-          install_llm_grader_requirements
-
-    - name: Install model specific dependencies and run tests
-      run: |
-        cd $GITHUB_WORKSPACE && \
-          python3 scripts/build_and_test.py \
-              --venv="${{ env.VENV_PATH }}" \
-              "test_gpu_models_${{ env.TEST_SUITE }}"
-
-    - name: Generate Test Failure Summary
-      if: always()
-      run: |
-        source "${{ env.VENV_PATH }}/bin/activate"
-        pip install six
-        python3 scripts/build_and_test.py --venv="${{ env.VENV_PATH }}" generate_test_summary
-
-    - name: Upload Test Results
-      if: always()
-      uses: actions/upload-artifact@v7
-      with:
-        name: test-results
-        path: ${{ github.workspace }}/test-results
-
-    - name: Upload CSV Results
-      if: always()
-      uses: actions/upload-artifact@v7
-      with:
-        name: pytest-results
-        path: ${{ github.workspace }}/*.csv
-
-    - name: Add CSV to GitHub summary
-      if: always()
-      run: |
-        source "${{ env.VENV_PATH }}/bin/activate"
-        python -c 'import os, pandas as pd; print("## 🧪 Evaluate Results"); fn="test_evaluate.csv"; print(pd.read_csv(fn).to_markdown(index=False)) if os.path.exists(fn) else print(f"File {fn} not found.")' >> "$GITHUB_STEP_SUMMARY"
-        python -c 'import os, pandas as pd; print("## 🖥️ On-device Results"); fn="test_perf_on_device.csv"; print(pd.read_csv(fn).to_markdown(index=False)) if os.path.exists(fn) else print(f"File {fn} not found.")' >> "$GITHUB_STEP_SUMMARY"
-
-  cleanup_runner:
-    name: "Cleanup GPU Runner"
-    needs: [start_gpu_runner, run_tests]
-    if: ${{ always() && inputs.use_kube }}
-    runs-on: [tetra-ubuntu-2204, self-hosted]
-    steps:
-    - uses: actions/checkout@v6
-    - uses: ./.github/actions/stop-gpu-runner
-      with:
-        runner-ids: ${{ needs.start_gpu_runner.outputs.runner-label }}
-        argo-namespace: "aihub-ci"
-        kubeconfig: ${{ secrets.KUBECONFIG }}
-        pat-token: ${{ secrets.KUBE_GH_TOKEN }}
-        sudo-password: ${{ secrets.TETRASERVICE_PASSWORD }}
+  weekly:
+    uses: ./.github/workflows/gpu_pod_lifecycle.yml
+    with:
+      is_gpu_weekly: true
+      runner-id: gpu-weekly-${{ github.run_id }}-${{ github.run_attempt }}
+      gpu-request: '1'
+      memory-request: '512Gi'
+      models: ${{ inputs.models || 'all' }}
+      deployment: ${{ inputs.deployment || 'prod' }}
+    secrets: inherit
 
   notify_failure:
     if: ${{ failure() && github.event_name == 'schedule' }}
     name: Notify Failure
-    needs: [start_gpu_runner, run_tests]
+    needs: weekly
     runs-on: [tetra-ubuntu-2204, self-hosted]
     permissions:
       contents: read
       issues: write
       actions: read
-
     steps:
     - name: Create GitHub Issue
       id: create-github-issue
@@ -240,7 +58,7 @@ jobs:
           const result = await github.rest.issues.create({
             owner: 'qcom-ai-hub',
             repo: 'tetracode',
-            title: `GPU ${{ env.TEST_SUITE }} Tests Failed - ${today}`,
+            title: `GPU Weekly Tests Failed - ${today}`,
             body: `[View Workflow Run](${runUrl})\n\nPlease assign the appropriate ML Tech Team member.\n\n📊 [Update the Nightly Failure Log spreadsheet](https://qualcomm.sharepoint.com/:x:/r/teams/TetraAI2/Shared%20Documents/model-zoo/QAIHM%20Nightly%20Failure%20Log.xlsx?d=w73cc2ddb0d7b4fe58a9a8ba9efc10fd8) (GPU tab)`,
             labels: ['p0', 'ai-hub-models', 'gen-ai'],
             assignees: ['shreyajn_QCOM']
@@ -248,9 +66,7 @@ jobs:
 
           core.setOutput('issue_url', result.data.html_url);
 
-    # Send result to Slack channel
     - name: Send Slack Notification
-      id: slack_notification
       uses: slackapi/slack-github-action@v3
       with:
         method: chat.postMessage
@@ -258,7 +74,7 @@ jobs:
         payload: |
           channel: "C06UY9XU212"
           text: |-
-            🚨 GPU ${{ env.TEST_SUITE }} Tests Failed
+            🚨 GPU Weekly Tests Failed
 
             Workflow: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}/attempts/${{ github.run_attempt }}
 

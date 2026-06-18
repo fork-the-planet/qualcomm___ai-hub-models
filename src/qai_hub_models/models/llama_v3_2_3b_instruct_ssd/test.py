@@ -301,10 +301,6 @@ def test_evaluate(
 @pytest.mark.skip(
     reason="This test is skipped till we use it to get automatic performance numbers for the LLMs."
 )
-@pytest.mark.skipif(
-    not torch.cuda.is_available(),
-    reason="This test can be run on GPU only.",
-)
 @pytest.mark.parametrize(
     ("precision", "scorecard_path", "device"),
     [
@@ -359,9 +355,8 @@ def test_compile(
     reason="This test is skipped till we use it to get automatic performance numbers for the LLMs."
 )
 @pytest.mark.skipif(
-    not torch.cuda.is_available()
-    or not importlib.util.find_spec("qualcomm_device_cloud_sdk"),
-    reason="This test can be run on GPU only. Also needs QDC package to run.",
+    not importlib.util.find_spec("qualcomm_device_cloud_sdk"),
+    reason="This test requires the qualcomm_device_cloud_sdk package.",
 )
 @pytest.mark.parametrize(
     ("precision", "scorecard_path", "device"),

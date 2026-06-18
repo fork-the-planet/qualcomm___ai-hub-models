@@ -1,0 +1,42 @@
+name: Check GPU Node Availability
+description: Check whether any self-hosted GPU runner is online and idle. Sets use_kube=false when one is, else true.
+
+inputs:
+  pat-token:
+    description: 'GitHub PAT used to query the runner inventory'
+    required: true
+
+outputs:
+  use_kube:
+    description: "'true' when no GPU runner is online + idle (use kube fallback), 'false' otherwise"
+    value: ${{ steps.check.outputs.use_kube }}
+
+runs:
+  using: composite
+  steps:
+    - id: check
+      shell: bash
+      env:
+        PAT_TOKEN: ${{ inputs.pat-token }}
+        GH_API_URL: ${{ github.api_url }}
+        GH_REPOSITORY: ${{ github.repository }}
+      run: |
+        ORG=$(echo "$GH_REPOSITORY" | cut -d/ -f1)
+        RUNNERS=$(curl -s \
+          -H "Authorization: token $PAT_TOKEN" \
+          -H "Accept: application/vnd.github+json" \
+          "$GH_API_URL/orgs/$ORG/actions/runners?per_page=100")
+        TOTAL=$(echo "$RUNNERS" | jq '.total_count // -1')
+        if [ "$TOTAL" = "-1" ]; then
+          echo "Org runner query failed; response:"
+          echo "$RUNNERS" | jq -r '.message // "no message"'
+          echo "use_kube=true" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+        GPU_ONLINE=$(echo "$RUNNERS" | jq '[.runners[] | select(.name | endswith("-gpulv")) | select(.status == "online") | select(.busy == false)] | length')
+        echo "Org runners total: $TOTAL; online idle -gpulv runners: $GPU_ONLINE"
+        if [ "$GPU_ONLINE" -gt 0 ]; then
+          echo "use_kube=false" >> "$GITHUB_OUTPUT"
+        else
+          echo "use_kube=true" >> "$GITHUB_OUTPUT"
+        fi
