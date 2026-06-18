@@ -15,6 +15,7 @@ from qai_hub_models_cli.proto import info_pb2
 from qai_hub_models_cli.proto.release_assets_pb2 import ModelReleaseAssets
 from qai_hub_models_cli.proto.shared.precision_pb2 import Precision
 from qai_hub_models_cli.proto.shared.runtime_pb2 import Runtime
+from qai_hub_models_cli.proto.shared.tool_versions_pb2 import ToolVersions
 from qai_hub_models_cli.proto_helpers._common import fetch_model_proto
 from qai_hub_models_cli.proto_helpers.info import get_model_info
 from qai_hub_models_cli.proto_helpers.manifest import get_manifest_entry
@@ -33,6 +34,27 @@ class AssetNotFoundError(FileNotFoundError):
     def __init__(self, *args: object, model_sharing_restricted: bool = False) -> None:
         self.model_sharing_restricted = model_sharing_restricted
         super().__init__(*args)
+
+
+# Tool version proto fields paired with their display labels, in display order.
+_TOOL_VERSION_LABELS: list[tuple[str, str]] = [
+    ("qairt", "QAIRT"),
+    ("onnx", "ONNX"),
+    ("onnx_runtime", "ONNX Runtime"),
+    ("tflite", "TFLite"),
+    ("litert", "LiteRT"),
+    ("ai_hub_models", "AI Hub Models"),
+]
+
+
+def format_tool_versions(tool_versions: ToolVersions) -> str:
+    """Format the set tool versions as a comma-separated ``Label X.Y`` string."""
+    parts = [
+        f"{label} {value}"
+        for field, label in _TOOL_VERSION_LABELS
+        if (value := getattr(tool_versions, field))
+    ]
+    return ", ".join(parts) if parts else "—"
 
 
 @functools.lru_cache(maxsize=1)
@@ -134,25 +156,30 @@ def format_release_assets_table(
     title: str | None = None,
 ) -> str:
     """Format a table of download options for a model."""
-    grouped: dict[tuple[str, str], list[str | None]] = {}
+    grouped: dict[tuple[str, str, str], list[str | None]] = {}
     for asset in release_assets.assets:
         prec = precision_proto_to_str(asset.precision)
         rt = runtime_proto_to_str(asset.runtime)
-        key = (prec, rt)
+        sdk = (
+            format_tool_versions(asset.tool_versions)
+            if asset.HasField("tool_versions")
+            else "—"
+        )
+        key = (prec, rt, sdk)
         chipset = asset.chipset if asset.HasField("chipset") else None
         grouped.setdefault(key, []).append(chipset)
 
     table = PrettyTable()
     if title:
         table.title = title
-    table.field_names = ["Precision", "Runtime", "Chipsets"]
+    table.field_names = ["Precision", "Runtime", "Chipsets", "SDK Versions"]
     table.align = "l"
-    for (prec, rt), chipsets in grouped.items():
+    for (prec, rt, sdk), chipsets in grouped.items():
         if all(c is None for c in chipsets):
             chipset_str = "Universal"
         else:
             chipset_str = ", ".join(sorted(c for c in chipsets if c))
-        table.add_row([prec, rt, chipset_str])
+        table.add_row([prec, rt, chipset_str, sdk])
     wrap_table_column(table, 2)
 
     chipset_flag = (

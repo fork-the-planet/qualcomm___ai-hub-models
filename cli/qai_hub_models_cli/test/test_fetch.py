@@ -238,11 +238,13 @@ def test_add_fetch_parser_output_dir() -> None:
     assert args.output_dir == "/tmp/out"
 
 
+@patch("qai_hub_models_cli.cli.get_model_asset_details")
 @patch("qai_hub_models_cli.cli.fetch", return_value=Path("/out/model"))
 @patch("qai_hub_models_cli.cli.print_upgrade_notice")
 def test_run_fetch_with_parsed_args(
     _mock_notice: MagicMock,  # noqa: PT019
     mock_fetch: MagicMock,
+    _mock_asset: MagicMock,  # noqa: PT019
 ) -> None:
     """Run _run_fetch with real parsed args to catch attribute name mismatches."""
     import argparse as _argparse
@@ -258,12 +260,14 @@ def test_run_fetch_with_parsed_args(
 # ── upgrade notice ──────────────────────────────────────────────────
 
 
+@patch("qai_hub_models_cli.cli.get_model_asset_details")
 @patch("qai_hub_models_cli.cli.print_upgrade_notice")
 @patch("qai_hub_models_cli.cli.fetch", return_value=Path("/out/model"))
 @patch("qai_hub_models_cli.cli.__version__", "0.45.0")
 def test_fetch_calls_upgrade_notice(
     mock_fetch: MagicMock,
     mock_notice: MagicMock,
+    _mock_asset: MagicMock,  # noqa: PT019
 ) -> None:
     args = _make_args({"qaihm_version": "0.45.0"})
     _run_fetch(args)

@@ -37,6 +37,8 @@ from qai_hub_models_cli.proto_helpers.platform import (
 )
 from qai_hub_models_cli.proto_helpers.release_assets import (
     format_release_assets_table,
+    format_tool_versions,
+    get_model_asset_details,
     get_model_release_assets,
 )
 from qai_hub_models_cli.utils import wrap_table_column
@@ -110,6 +112,24 @@ def _run_fetch(args: argparse.Namespace) -> None:
         print(f"Extracted to: {result}")
     else:
         print(f"Saved to: {result}")
+
+    try:
+        asset = get_model_asset_details(
+            args.model,
+            args.runtime,
+            args.precision,
+            args.chipset,
+            args.qaihm_version,
+        )
+    except Exception:
+        asset = None
+    if asset is not None and asset.HasField("tool_versions"):
+        print(
+            f"\nThis download was verified with: "
+            f"{format_tool_versions(asset.tool_versions)}\n"
+            "Run the model with matching versions to match our reported numerics and performance. Other "
+            "versions may behave differently or fail to run."
+        )
 
     print_upgrade_notice()
 

@@ -18,6 +18,7 @@ from qai_hub_models_cli.proto.info_pb2 import (
 from qai_hub_models_cli.proto.release_assets_pb2 import ModelReleaseAssets
 from qai_hub_models_cli.proto.shared.precision_pb2 import Precision
 from qai_hub_models_cli.proto.shared.runtime_pb2 import Runtime
+from qai_hub_models_cli.proto.shared.tool_versions_pb2 import ToolVersions
 
 
 def _fake_model_info() -> ModelInfo:
@@ -45,12 +46,14 @@ def _fake_release_assets() -> ModelReleaseAssets:
                 precision=Precision.PRECISION_FLOAT,
                 runtime=Runtime.RUNTIME_TFLITE,
                 download_url="https://example.com/mobilenet_v2-tflite-float.zip",
+                tool_versions=ToolVersions(tflite="2.16", ai_hub_models="0.45.0"),
             ),
             ModelReleaseAssets.AssetDetails(
                 precision=Precision.PRECISION_FLOAT,
                 runtime=Runtime.RUNTIME_QNN_CONTEXT_BINARY,
                 chipset="qualcomm-snapdragon-8-gen-3",
                 download_url="https://example.com/mobilenet_v2-qnn-float-sd8g3.zip",
+                tool_versions=ToolVersions(qairt="2.31"),
             ),
         ],
     )
@@ -103,6 +106,11 @@ def test_info_download_options(
     assert "qualcomm-snapdragon-8-gen-3" in output
     assert "qai_hub_models fetch mobilenet_v2" in output
     assert "-c <chipset>" in output
+    # SDK Versions column lists all set tool versions.
+    assert "SDK Versions" in output
+    assert "QAIRT 2.31" in output
+    assert "TFLite 2.16" in output
+    assert "AI Hub Models 0.45.0" in output
 
 
 def test_info_minimal_model(capsys: pytest.CaptureFixture[str]) -> None:
