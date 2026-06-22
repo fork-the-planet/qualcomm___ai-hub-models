@@ -123,7 +123,7 @@ def test_info_download_options(
     assert "Snapdragon 8 Gen 3" in output
     assert "qualcomm-snapdragon-8-gen-3" not in output
     assert "qai_hub_models fetch mobilenet_v2" in output
-    assert "-c <chipset>" in output
+    assert "-c '<chipset>'" in output
     # SDK Versions column lists all set tool versions.
     assert "SDK Versions" in output
     assert "QAIRT 2.31" in output

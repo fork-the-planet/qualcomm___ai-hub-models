@@ -14,7 +14,7 @@ from qai_hub_models_cli.proto.release_assets_pb2 import ModelReleaseAssets
 from qai_hub_models_cli.proto.shared.precision_pb2 import Precision
 from qai_hub_models_cli.proto.shared.runtime_pb2 import Runtime
 
-_RELEASE_VERSION = Version("0.50.1")
+_RELEASE_VERSION = Version("0.52.0")  # >= MIN_MANIFEST_VERSION (manifest path)
 
 
 def _s3_release_assets() -> ModelReleaseAssets:
@@ -88,11 +88,16 @@ def test_get_asset_url_returns_s3_url_from_internal_proto() -> None:
             return_value=PlatformInfo(),
         ),
         patch(
-            "qai_hub_models_cli.proto_helpers.release_assets.get_runtime_info",
+            "qai_hub_models_cli.fetch.get_runtime_info",
             return_value=RuntimeInfo(is_aot_compiled=False),
         ),
     ):
-        url = get_asset_url("mobilenet_v2", "tflite", "float", _RELEASE_VERSION)
+        url = get_asset_url(
+            model="mobilenet_v2",
+            runtime="tflite",
+            precision="float",
+            version=_RELEASE_VERSION,
+        )
 
     assert url == s3_url
 
@@ -109,7 +114,12 @@ def test_fetch_end_to_end_s3(
     mock_get_url.return_value = s3_url
     mock_download.return_value = tmp_path / "mobilenet_v2-tflite-float.zip"
 
-    fetch("mobilenet_v2", "tflite", tmp_path, version=_RELEASE_VERSION)
+    fetch(
+        model="mobilenet_v2",
+        runtime="tflite",
+        output_dir=tmp_path,
+        version=_RELEASE_VERSION,
+    )
 
     mock_download.assert_called_once()
     assert mock_download.call_args[0][0] == s3_url

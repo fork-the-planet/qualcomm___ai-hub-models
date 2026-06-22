@@ -50,10 +50,13 @@ from qai_hub_models_cli.proto_helpers.platform_enums import (
     world_str_to_proto,
 )
 from qai_hub_models_cli.proto_helpers.release_assets import (
+    filter_release_assets,
+    format_fetch_commands,
     format_release_assets_table,
     format_tool_versions,
     get_model_asset_details,
     get_model_release_assets,
+    parse_sdk_version_filters,
 )
 from qai_hub_models_cli.utils import build_table, wrap_table_column
 from qai_hub_models_cli.versions import (
@@ -127,15 +130,58 @@ def _add_chipset_attribute_filter_args(parser: argparse.ArgumentParser) -> None:
 
 
 def _run_fetch(args: argparse.Namespace) -> None:
+    sdk_versions = parse_sdk_version_filters(args.sdk_version or [])
+
+    if args.info:
+        all_assets = get_model_release_assets(args.model, args.qaihm_version)
+        platform = get_platform(args.qaihm_version)
+        release_assets = filter_release_assets(
+            all_assets,
+            platform,
+            args.runtime,
+            args.precision,
+            args.chipset,
+            args.device,
+            sdk_versions,
+        )
+        if not release_assets.assets:
+            print("No release assets match the given filters.")
+            return
+        print(
+            format_release_assets_table(
+                release_assets,
+                platform.chipsets,
+                title="Release Assets",
+            )
+        )
+        print()
+        print(
+            format_fetch_commands(
+                release_assets,
+                args.model,
+                # The user is already running -i, so don't suggest it again.
+                subset=False,
+                runtime=args.runtime,
+                precision=args.precision,
+                chipset=args.chipset,
+                device=args.device,
+                sdk_versions=sdk_versions,
+            )
+        )
+        return
+
     try:
         if args.url_only:
             url = get_asset_url(
-                args.model,
-                args.runtime,
-                args.precision,
-                args.qaihm_version,
-                args.chipset,
-                args.device,
+                model=args.model,
+                runtime=args.runtime,
+                precision=args.precision,
+                version=args.qaihm_version,
+                chipset=args.chipset,
+                device=args.device,
+                quiet=args.quiet,
+                url_only=True,
+                sdk_versions=sdk_versions,
             )
             print(url)
             return
@@ -150,6 +196,7 @@ def _run_fetch(args: argparse.Namespace) -> None:
             extract=args.extract,
             output_dir=args.output_dir,
             quiet=args.quiet,
+            sdk_versions=sdk_versions,
         )
     except Exception as e:
         if args.quiet and not isinstance(
@@ -207,10 +254,11 @@ def add_fetch_parser(subparsers: argparse._SubParsersAction) -> argparse.Argumen
     parser.add_argument(
         "-r",
         "--runtime",
-        required=True,
+        default=None,
         type=str.lower,
         help=f"Target runtime. Known values: {runtime_values}. "
-        "Older releases may support different values.",
+        "Older releases may support different values. "
+        "Required unless -i/--info is given.",
     )
     precision_values = ", ".join(
         [
@@ -222,10 +270,10 @@ def add_fetch_parser(subparsers: argparse._SubParsersAction) -> argparse.Argumen
     parser.add_argument(
         "-p",
         "--precision",
-        default="float",
+        default=None,
         type=str.lower,
         help=f"Model precision. Known values: {precision_values}. "
-        "Older releases may support different values. Default: float.",
+        "Older releases may support different values.",
     )
     # TODO(#18389): Add a list of valid chipsets
     # so the CLI can validate and suggest chipset names.
@@ -245,6 +293,16 @@ def add_fetch_parser(subparsers: argparse._SubParsersAction) -> argparse.Argumen
         help="Device name for device-specific (AOT compiled) runtimes. "
         "Run `qai-hub-models devices` to see supported devices. Cannot be specified with chipset.",
     )
+    parser.add_argument(
+        "-s",
+        "--sdk-version",
+        nargs="+",
+        default=None,
+        type=str.lower,
+        help="Filter by SDK/tool version using 'tool=version' syntax (e.g. "
+        "'litert=1.4.4' or 'qairt=2.20'). Accepts multiple values; an asset "
+        "must match all of them.",
+    )
     _add_version_arg(parser)
     parser.add_argument(
         "--extract",
@@ -262,6 +320,13 @@ def add_fetch_parser(subparsers: argparse._SubParsersAction) -> argparse.Argumen
         "--url-only",
         action="store_true",
         help="Print the download URL only (do not download).",
+    )
+    parser.add_argument(
+        "-i",
+        "--info",
+        action="store_true",
+        help="List the supported release assets and return without downloading. "
+        "The runtime, precision, chipset, device, and sdk-version args act as filters.",
     )
     _add_quiet_arg(parser, "Suppress all output except the result path.")
     parser.set_defaults(func=_run_fetch)
@@ -564,10 +629,12 @@ def _run_info(args: argparse.Namespace) -> None:
             format_release_assets_table(
                 release_assets,
                 get_platform(args.qaihm_version).chipsets,
-                model=args.model,
                 title="Download Options",
             )
         )
+        print()
+        print(format_fetch_commands(release_assets, args.model))
+        print()
         print(
             f"Most models can be further customized beyond what is offered by standard model downloads. Scripts that can export the model from source are available at {model_repo_url(info.id, args.qaihm_version)}"
         )

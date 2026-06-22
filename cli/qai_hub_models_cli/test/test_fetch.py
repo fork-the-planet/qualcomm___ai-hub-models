@@ -4,6 +4,7 @@
 # ---------------------------------------------------------------------
 from __future__ import annotations
 
+import argparse
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -11,322 +12,453 @@ import pytest
 from packaging.version import Version
 
 from qai_hub_models_cli.cli import _run_fetch, add_fetch_parser
-from qai_hub_models_cli.common import (
-    ASSET_FOLDER,
-    STORE_URL,
+from qai_hub_models_cli.fetch import _asset_url, fetch, get_asset_url
+from qai_hub_models_cli.proto.platform_pb2 import (
+    ChipsetInfo,
+    DeviceInfo,
+    FormFactor,
+    FormFactorInfo,
+    PlatformInfo,
+    RuntimeInfo,
 )
-from qai_hub_models_cli.fetch import (
-    _asset_url,
-    fetch,
-    get_asset_url,
-)
+from qai_hub_models_cli.proto.release_assets_pb2 import ModelReleaseAssets
+from qai_hub_models_cli.proto.shared.precision_pb2 import Precision
+from qai_hub_models_cli.proto.shared.runtime_pb2 import Runtime
+from qai_hub_models_cli.proto_helpers.release_assets import AssetNotFoundError
+
+# Legacy (pre-manifest) version vs a manifest-era version (>= MIN_MANIFEST_VERSION).
+_LEGACY_VERSION = Version("0.45.0")
+_VERSION = Version("0.52.0")
+_TFLITE = Runtime.RUNTIME_TFLITE
+_QNN = Runtime.RUNTIME_QNN_CONTEXT_BINARY
+_FLOAT = Precision.PRECISION_FLOAT
+_W8A8 = Precision.PRECISION_W8A8
+_CHIP = "qualcomm-snapdragon-8-gen-3"
+
 
 # ── _asset_url ───────────────────────────────────────────────────────
 
 
-def test_asset_url_no_chipset() -> None:
-    url, filename = _asset_url("mobilenet_v2", "tflite", "float", Version("0.45.0"))
-    assert filename == "mobilenet_v2-tflite-float.zip"
-    assert url == (
-        f"{STORE_URL}/"
-        f"{ASSET_FOLDER.format(model_id='mobilenet_v2', version='0.45.0')}/"
-        f"mobilenet_v2-tflite-float.zip"
-    )
-
-
-def test_asset_url_with_chipset() -> None:
+@pytest.mark.parametrize(
+    ("chipset", "expected_filename"),
+    [
+        (None, "mobilenet_v2-tflite-float.zip"),
+        (_CHIP, "mobilenet_v2-tflite-float-qualcomm_snapdragon_8_gen_3.zip"),
+    ],
+)
+def test_asset_url(chipset: str | None, expected_filename: str) -> None:
     url, filename = _asset_url(
-        "mobilenet_v2",
-        "qnn_context_binary",
-        "w8a8",
-        Version("0.45.0"),
-        "qualcomm-snapdragon-8-gen-3",
+        "mobilenet_v2", "tflite", "float", _LEGACY_VERSION, chipset
     )
-    assert (
-        filename
-        == "mobilenet_v2-qnn_context_binary-w8a8-qualcomm_snapdragon_8_gen_3.zip"
-    )
-    assert "qualcomm_snapdragon_8_gen_3" in url
+    assert filename == expected_filename
+    assert url.endswith(expected_filename)
 
 
-def test_asset_url_with_enum_types() -> None:
-    _, filename = _asset_url("mobilenet_v2", "tflite", "float", Version("0.45.0"))
-    assert filename == "mobilenet_v2-tflite-float.zip"
-
-
-# ── get_asset_url ────────────────────────────────────────────────────
+# ── get_asset_url (legacy head-request path) ─────────────────────────
 
 
 def _mock_head(status_map: dict[str, int]) -> object:
-    """Return a mock for requests.head that returns status codes based on URL substrings."""
+    """Mock requests.head returning a status based on URL substrings (else 404)."""
 
     def _head(url: str, timeout: int = 10) -> MagicMock:
         resp = MagicMock()
-        for pattern, status in status_map.items():
-            if pattern in url:
-                resp.status_code = status
-                return resp
-        resp.status_code = 404
+        resp.status_code = next((s for pat, s in status_map.items() if pat in url), 404)
         return resp
 
     return _head
 
 
-def test_get_asset_url_found() -> None:
+def test_get_asset_url_legacy_found() -> None:
     with patch("qai_hub_models_cli.fetch.requests.head", _mock_head({"tflite": 200})):
-        url = get_asset_url("mobilenet_v2", "tflite", "float", Version("0.45.0"))
+        url = get_asset_url(
+            model="mobilenet_v2",
+            runtime="tflite",
+            precision="float",
+            version=_LEGACY_VERSION,
+        )
     assert "mobilenet_v2-tflite-float.zip" in url
 
 
-def test_get_asset_url_not_found() -> None:
+def test_get_asset_url_legacy_chipset_fallback() -> None:
+    """A missing chipset asset falls back to the generic URL."""
+    with patch(
+        "qai_hub_models_cli.fetch.requests.head",
+        _mock_head({"qualcomm_snapdragon": 404, "tflite-float.zip": 200}),
+    ):
+        url = get_asset_url(
+            model="mobilenet_v2",
+            runtime="tflite",
+            precision="float",
+            version=_LEGACY_VERSION,
+            chipset=_CHIP,
+        )
+    assert "qualcomm_snapdragon" not in url
+
+
+def test_get_asset_url_legacy_not_found() -> None:
     with (
         patch("qai_hub_models_cli.fetch.requests.head", _mock_head({})),
         pytest.raises(FileNotFoundError, match="No asset found"),
     ):
-        get_asset_url("fake_model", "tflite", "float", Version("0.45.0"))
-
-
-def test_get_asset_url_chipset_fallback() -> None:
-    """When chipset URL returns 404, falls back to generic URL."""
-    with patch(
-        "qai_hub_models_cli.fetch.requests.head",
-        _mock_head({"qualcomm_snapdragon": 404, "mobilenet_v2-tflite-float.zip": 200}),
-    ):
-        url = get_asset_url(
-            "mobilenet_v2",
-            "tflite",
-            "float",
-            Version("0.45.0"),
-            chipset="qualcomm-snapdragon-8-gen-3",
+        get_asset_url(
+            model="fake_model",
+            runtime="tflite",
+            precision="float",
+            version=_LEGACY_VERSION,
         )
-    assert "qualcomm_snapdragon" not in url
-    assert "mobilenet_v2-tflite-float.zip" in url
 
 
-def test_get_asset_url_chipset_found() -> None:
-    """When chipset URL returns 200, uses it directly."""
-    with patch(
-        "qai_hub_models_cli.fetch.requests.head",
-        _mock_head({"qualcomm_snapdragon": 200}),
-    ):
-        url = get_asset_url(
-            "mobilenet_v2",
-            "tflite",
-            "float",
-            Version("0.45.0"),
-            chipset="qualcomm-snapdragon-8-gen-3",
-        )
-    assert "qualcomm_snapdragon" in url
-
-
-def test_get_asset_url_unexpected_status() -> None:
+def test_get_asset_url_legacy_unexpected_status() -> None:
     with (
-        patch(
-            "qai_hub_models_cli.fetch.requests.head",
-            _mock_head({"tflite": 500}),
-        ),
+        patch("qai_hub_models_cli.fetch.requests.head", _mock_head({"tflite": 500})),
         pytest.raises(ConnectionError, match="Unexpected response"),
     ):
-        get_asset_url("mobilenet_v2", "tflite", "float", Version("0.45.0"))
+        get_asset_url(
+            model="mobilenet_v2",
+            runtime="tflite",
+            precision="float",
+            version=_LEGACY_VERSION,
+        )
 
 
-# ── fetch (integration with mocked network) ─────────────────────────
+# ── get_asset_url (manifest path) ────────────────────────────────────
 
 
-@patch("qai_hub_models_cli.fetch.get_asset_url")
-@patch("qai_hub_models_cli.fetch.download")
-def test_fetch_downloads_to_output_dir(
-    mock_download: MagicMock,
-    mock_get_url: MagicMock,
-    tmp_path: Path,
+def _platform(*_args: object) -> PlatformInfo:
+    """Platform with a non-AOT tflite runtime and an AOT qnn runtime.
+
+    Accepts (and ignores) a version arg so it can stand in for ``get_platform``.
+    """
+    return PlatformInfo(
+        aihm_version="0.45.0",
+        runtimes=[
+            RuntimeInfo(runtime=_TFLITE, is_aot_compiled=False),
+            RuntimeInfo(runtime=_QNN, is_aot_compiled=True),
+        ],
+        form_factors=[FormFactorInfo(form_factor=FormFactor.FORM_FACTOR_PHONE)],
+        devices=[
+            DeviceInfo(
+                name="Samsung Galaxy S24",
+                chipset=_CHIP,
+                form_factor=FormFactor.FORM_FACTOR_PHONE,
+            )
+        ],
+        chipsets=[ChipsetInfo(name=_CHIP, marketing_name="Snapdragon 8 Gen 3")],
+    )
+
+
+def _assets(*specs: tuple) -> ModelReleaseAssets:
+    """Build release assets from ``(precision, runtime, chipset_or_None)`` specs."""
+    return ModelReleaseAssets(
+        aihm_version="0.45.0",
+        model_id="mobilenet_v2",
+        assets=[
+            ModelReleaseAssets.AssetDetails(
+                precision=p,
+                runtime=r,
+                download_url=f"https://example.com/{i}.zip",
+                **({"chipset": c} if c else {}),
+            )
+            for i, (p, r, c) in enumerate(specs)
+        ],
+    )
+
+
+@patch("qai_hub_models_cli.fetch.get_platform", _platform)
+@patch("qai_hub_models_cli.fetch.get_model_release_assets")
+def test_get_asset_url_single_match_returns_url(mock_assets: MagicMock) -> None:
+    mock_assets.return_value = _assets((_FLOAT, _TFLITE, None), (_W8A8, _QNN, _CHIP))
+    assert (
+        get_asset_url(
+            model="mobilenet_v2", runtime="tflite", precision="float", version=_VERSION
+        )
+        == "https://example.com/0.zip"
+    )
+
+
+@patch("qai_hub_models_cli.fetch.get_platform", _platform)
+@patch("qai_hub_models_cli.fetch.get_model_release_assets")
+def test_get_asset_url_sdk_version_disambiguates(mock_assets: MagicMock) -> None:
+    """sdk_versions reaches the download resolution and picks the matching asset."""
+    from qai_hub_models_cli.proto.shared.tool_versions_pb2 import ToolVersions
+
+    # Two assets identical except for QAIRT version; only sdk_versions can pick one.
+    mock_assets.return_value = ModelReleaseAssets(
+        model_id="mobilenet_v2",
+        assets=[
+            ModelReleaseAssets.AssetDetails(
+                precision=_FLOAT,
+                runtime=_TFLITE,
+                download_url="https://example.com/old.zip",
+                tool_versions=ToolVersions(qairt="2.20"),
+            ),
+            ModelReleaseAssets.AssetDetails(
+                precision=_FLOAT,
+                runtime=_TFLITE,
+                download_url="https://example.com/new.zip",
+                tool_versions=ToolVersions(qairt="2.31"),
+            ),
+        ],
+    )
+    url = get_asset_url(
+        model="mobilenet_v2",
+        runtime="tflite",
+        precision="float",
+        version=_VERSION,
+        sdk_versions={"qairt": "2.31"},
+    )
+    assert url == "https://example.com/new.zip"
+
+
+@pytest.mark.parametrize(
+    ("runtime", "precision", "assets", "reason"),
+    [
+        # No runtime, everything matches -> ask for a runtime.
+        (
+            None,
+            None,
+            ((_FLOAT, _TFLITE, None), (_W8A8, _QNN, _CHIP)),
+            "runtime is required",
+        ),
+        # Runtime alone leaves two precisions -> ask for a precision.
+        (
+            "tflite",
+            None,
+            ((_FLOAT, _TFLITE, None), (_W8A8, _TFLITE, None)),
+            "precision is required",
+        ),
+        # AOT runtime with two chipsets and no chipset arg -> ask for a chipset.
+        (
+            "qnn_context_binary",
+            "w8a8",
+            ((_W8A8, _QNN, _CHIP), (_W8A8, _QNN, "qualcomm-snapdragon-8-elite")),
+            "chipset or device is required",
+        ),
+        # Fully specified but still two matches -> ask to narrow filters.
+        (
+            "tflite",
+            "float",
+            ((_FLOAT, _TFLITE, None), (_FLOAT, _TFLITE, None)),
+            "2 assets match",
+        ),
+    ],
+)
+@patch("qai_hub_models_cli.fetch.get_platform", _platform)
+@patch("qai_hub_models_cli.fetch.get_model_release_assets")
+def test_get_asset_url_ambiguous(
+    mock_assets: MagicMock,
+    runtime: str | None,
+    precision: str | None,
+    assets: tuple,
+    reason: str,
 ) -> None:
-    mock_get_url.return_value = "https://example.com/model-tflite-float.zip"
-    mock_download.return_value = tmp_path / "model-tflite-float.zip"
+    """Ambiguous requests raise with the reason and the matching-assets table."""
+    mock_assets.return_value = _assets(*assets)
+    with pytest.raises(AssetNotFoundError, match=reason) as exc:
+        get_asset_url(
+            model="mobilenet_v2",
+            runtime=runtime,
+            precision=precision,
+            version=_VERSION,
+        )
+    assert "current selection(s)" in str(exc.value)  # table shown
 
+
+@patch("qai_hub_models_cli.fetch.get_platform", _platform)
+@patch("qai_hub_models_cli.fetch.get_model_release_assets")
+def test_get_asset_url_no_match(mock_assets: MagicMock) -> None:
+    """Zero matches gives a terse message with the list-all hint and no table."""
+    mock_assets.return_value = _assets((_FLOAT, _TFLITE, None))
+    with pytest.raises(AssetNotFoundError) as exc:
+        get_asset_url(
+            model="mobilenet_v2", runtime="tflite", precision="w8a8", version=_VERSION
+        )
+    msg = str(exc.value)
+    assert "No asset found" in msg
+    assert "fetch mobilenet_v2 -i" in msg
+    assert "Precision" not in msg  # no table
+
+
+@patch("qai_hub_models_cli.fetch.get_platform", _platform)
+@patch("qai_hub_models_cli.fetch.get_model_release_assets")
+def test_get_asset_url_quiet_omits_table(mock_assets: MagicMock) -> None:
+    mock_assets.return_value = _assets((_FLOAT, _TFLITE, None), (_FLOAT, _TFLITE, None))
+    with pytest.raises(AssetNotFoundError) as exc:
+        get_asset_url(
+            model="mobilenet_v2",
+            runtime="tflite",
+            precision="float",
+            version=_VERSION,
+            quiet=True,
+        )
+    msg = str(exc.value)
+    assert "2 assets match" in msg
+    assert "Precision" not in msg  # no table
+    assert "fetch mobilenet_v2 -i" not in msg  # no command hints
+
+
+# ── fetch ────────────────────────────────────────────────────────────
+
+
+@patch("qai_hub_models_cli.fetch.get_asset_url", return_value="s3://bucket/m.zip")
+@patch("qai_hub_models_cli.fetch.download")
+def test_fetch_forwards_args_and_downloads(
+    mock_download: MagicMock, mock_get_url: MagicMock, tmp_path: Path
+) -> None:
+    mock_download.return_value = tmp_path / "m.zip"
     result = fetch(
-        "model", "tflite", tmp_path, precision="float", version=Version("0.45.0")
+        model="model",
+        runtime="qnn_context_binary",
+        output_dir=tmp_path,
+        device="S24",
+        version=_VERSION,
     )
-    assert result == tmp_path / "model-tflite-float.zip"
-    mock_download.assert_called_once()
-    mock_get_url.assert_called_once_with(
-        "model", "tflite", "float", Version("0.45.0"), None, None
-    )
+    assert result == tmp_path / "m.zip"
+    # The resolved URL flows into download; the device flows into get_asset_url.
+    assert mock_download.call_args.args[0] == "s3://bucket/m.zip"
+    assert mock_get_url.call_args.kwargs["device"] == "S24"
 
 
-@patch("qai_hub_models_cli.fetch.get_asset_url")
+@patch("qai_hub_models_cli.fetch.get_asset_url", return_value="https://x/m-tflite.zip")
 @patch("qai_hub_models_cli.fetch.download")
 def test_fetch_extract_increments_dir(
-    mock_download: MagicMock,
-    mock_get_url: MagicMock,
-    tmp_path: Path,
+    mock_download: MagicMock, mock_get_url: MagicMock, tmp_path: Path
 ) -> None:
-    mock_get_url.return_value = "https://example.com/model-tflite-float.zip"
-    # Simulate existing extraction dir.
-    (tmp_path / "model-tflite-float").mkdir()
-    mock_download.return_value = tmp_path / "model-tflite-float-1"
-
-    fetch("model", "tflite", tmp_path, extract=True, version=Version("0.45.0"))
-    # download should have been called with the incremented path.
-    call_args = mock_download.call_args
-    assert "model-tflite-float-1" in str(call_args)
-
-
-@patch("qai_hub_models_cli.fetch.get_asset_url")
-@patch("qai_hub_models_cli.fetch.download")
-def test_fetch_forwards_device_to_get_asset_url(
-    mock_download: MagicMock,
-    mock_get_url: MagicMock,
-    tmp_path: Path,
-) -> None:
-    mock_get_url.return_value = "https://example.com/model-qnn-float.zip"
-    mock_download.return_value = tmp_path / "model-qnn-float.zip"
-
+    (tmp_path / "m-tflite").mkdir()  # collide with the extraction dir
     fetch(
-        "model",
-        "qnn_context_binary",
-        tmp_path,
-        device="Samsung Galaxy S24",
-        version=Version("0.45.0"),
+        model="model",
+        runtime="tflite",
+        output_dir=tmp_path,
+        extract=True,
+        version=_VERSION,
     )
-    # device is forwarded to get_asset_url, which resolves it to a chipset.
-    mock_get_url.assert_called_once_with(
-        "model",
-        "qnn_context_binary",
-        "float",
-        Version("0.45.0"),
-        None,
-        "Samsung Galaxy S24",
-    )
+    assert "m-tflite-1" in str(mock_download.call_args)
 
 
-# ── _run_fetch (CLI arg handling) ────────────────────────────────────
+# ── _run_fetch (CLI) ─────────────────────────────────────────────────
 
 
-def _make_args(overrides: dict[str, object] | None = None) -> MagicMock:
-    """Create a mock argparse.Namespace with fetch defaults."""
+def _make_args(**overrides: object) -> MagicMock:
+    args = MagicMock()
     defaults: dict[str, object] = dict(
         model="mobilenet_v2",
         runtime="tflite",
         precision="float",
         chipset=None,
         device=None,
-        qaihm_version=Version("0.45.0"),
+        qaihm_version=_VERSION,
         extract=True,
         output_dir=".",
         url_only=False,
+        info=False,
+        sdk_version=None,
         quiet=False,
     )
-    if overrides:
-        defaults.update(overrides)
-    args = MagicMock()
+    defaults.update(overrides)
     for k, v in defaults.items():
         setattr(args, k, v)
     return args
 
 
-@patch(
-    "qai_hub_models_cli.cli.get_asset_url",
-    return_value="https://example.com/asset.zip",
-)
+@patch("qai_hub_models_cli.cli.get_asset_url", return_value="https://x/asset.zip")
 def test_run_fetch_url_only_prints(
-    mock_url: MagicMock,
+    mock_url: MagicMock, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    args = _make_args({"url_only": True})
-    _run_fetch(args)
-    mock_url.assert_called_once()
+    _run_fetch(_make_args(url_only=True))
+    assert "https://x/asset.zip" in capsys.readouterr().out
 
 
-# ── add_fetch_parser ─────────────────────────────────────────────────
+@patch("qai_hub_models_cli.cli.format_fetch_commands", return_value="CMDS")
+@patch("qai_hub_models_cli.cli.format_release_assets_table", return_value="TABLE")
+@patch("qai_hub_models_cli.cli.get_platform")
+@patch("qai_hub_models_cli.cli.filter_release_assets")
+@patch("qai_hub_models_cli.cli.get_model_release_assets")
+@patch("qai_hub_models_cli.cli.fetch")
+def test_run_fetch_info_filters_and_skips_download(
+    mock_fetch: MagicMock,
+    mock_get_assets: MagicMock,
+    mock_filter: MagicMock,
+    mock_platform: MagicMock,
+    mock_table: MagicMock,
+    mock_cmds: MagicMock,
+) -> None:
+    mock_filter.return_value.assets = [MagicMock()]
+    _run_fetch(_make_args(info=True, runtime="tflite", precision=None))
+    mock_fetch.assert_not_called()
+    # All filter args (incl. parsed sdk_versions) are forwarded.
+    assert "tflite" in mock_filter.call_args.args
+    assert mock_filter.call_args.args[-1] == {}  # no sdk_version filters
 
 
-def test_add_fetch_parser_registers() -> None:
-    import argparse
-
-    parser = argparse.ArgumentParser()
-    subparsers = parser.add_subparsers()
-    fetch_parser = add_fetch_parser(subparsers)
-    assert fetch_parser is not None
-
-    args = parser.parse_args(["fetch", "mobilenet_v2", "--runtime", "tflite"])
-    assert args.model == "mobilenet_v2"
-    assert args.runtime == "tflite"
-    assert args.precision == "float"
-    assert args.extract is True
-    assert args.url_only is False
-
-
-def test_add_fetch_parser_output_dir() -> None:
-    """Ensure -o/--output-dir is stored as output_dir on the namespace."""
-    import argparse
-
-    parser = argparse.ArgumentParser()
-    subparsers = parser.add_subparsers()
-    add_fetch_parser(subparsers)
-
-    args = parser.parse_args(["fetch", "model", "-r", "tflite", "-o", "/tmp/out"])
-    assert args.output_dir == "/tmp/out"
+@patch("qai_hub_models_cli.cli.format_release_assets_table")
+@patch("qai_hub_models_cli.cli.get_platform")
+@patch("qai_hub_models_cli.cli.filter_release_assets")
+@patch("qai_hub_models_cli.cli.get_model_release_assets")
+@patch("qai_hub_models_cli.cli.fetch")
+def test_run_fetch_info_no_match(
+    mock_fetch: MagicMock,
+    mock_get_assets: MagicMock,
+    mock_filter: MagicMock,
+    mock_platform: MagicMock,
+    mock_table: MagicMock,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    mock_filter.return_value.assets = []
+    _run_fetch(_make_args(info=True))
+    mock_fetch.assert_not_called()
+    mock_table.assert_not_called()
+    assert "No release assets match" in capsys.readouterr().out
 
 
-def test_add_fetch_parser_device() -> None:
-    """-d/--device is parsed, and is mutually exclusive with -c/--chipset."""
-    import argparse
-
+@patch("qai_hub_models_cli.cli.print_upgrade_notice")
+@patch("qai_hub_models_cli.cli.get_model_asset_details")
+@patch("qai_hub_models_cli.cli.fetch", return_value=Path("/out/model"))
+def test_run_fetch_smoke(
+    mock_fetch: MagicMock, mock_asset: MagicMock, mock_notice: MagicMock
+) -> None:
+    """Drive _run_fetch with real parsed args to catch attribute mismatches."""
     parser = argparse.ArgumentParser()
     add_fetch_parser(parser.add_subparsers())
-
-    args = parser.parse_args(
-        ["fetch", "model", "-r", "qnn_context_binary", "-d", "Samsung Galaxy S24"]
-    )
-    assert args.device == "Samsung Galaxy S24"
-    assert args.chipset is None
-
-    with pytest.raises(SystemExit):
-        parser.parse_args(["fetch", "model", "-r", "tflite", "-c", "c", "-d", "d"])
-
-
-@patch("qai_hub_models_cli.cli.get_model_asset_details")
-@patch("qai_hub_models_cli.cli.fetch", return_value=Path("/out/model"))
-@patch("qai_hub_models_cli.cli.print_upgrade_notice")
-def test_run_fetch_with_parsed_args(
-    _mock_notice: MagicMock,  # noqa: PT019
-    mock_fetch: MagicMock,
-    _mock_asset: MagicMock,  # noqa: PT019
-) -> None:
-    """Run _run_fetch with real parsed args to catch attribute name mismatches."""
-    import argparse as _argparse
-
-    parser = _argparse.ArgumentParser()
-    subparsers = parser.add_subparsers()
-    add_fetch_parser(subparsers)
-    args = parser.parse_args(["fetch", "mobilenet_v2", "-r", "tflite"])
-    _run_fetch(args)
+    _run_fetch(parser.parse_args(["fetch", "mobilenet_v2", "-r", "tflite"]))
     mock_fetch.assert_called_once()
-
-
-# ── upgrade notice ──────────────────────────────────────────────────
-
-
-@patch("qai_hub_models_cli.cli.get_model_asset_details")
-@patch("qai_hub_models_cli.cli.print_upgrade_notice")
-@patch("qai_hub_models_cli.cli.fetch", return_value=Path("/out/model"))
-@patch("qai_hub_models_cli.cli.__version__", "0.45.0")
-def test_fetch_calls_upgrade_notice(
-    mock_fetch: MagicMock,
-    mock_notice: MagicMock,
-    _mock_asset: MagicMock,  # noqa: PT019
-) -> None:
-    args = _make_args({"qaihm_version": "0.45.0"})
-    _run_fetch(args)
     mock_notice.assert_called_once()
 
 
 @patch("qai_hub_models_cli.cli.print_upgrade_notice")
 @patch("qai_hub_models_cli.cli.fetch", return_value=Path("/out/model"))
-@patch("qai_hub_models_cli.cli.__version__", "0.45.0")
-def test_fetch_no_upgrade_when_quiet(
-    mock_fetch: MagicMock,
-    mock_notice: MagicMock,
+def test_run_fetch_quiet_skips_upgrade_notice(
+    mock_fetch: MagicMock, mock_notice: MagicMock
 ) -> None:
-    args = _make_args({"qaihm_version": "0.45.0", "quiet": True})
-    _run_fetch(args)
+    _run_fetch(_make_args(quiet=True))
     mock_notice.assert_not_called()
+
+
+# ── add_fetch_parser ─────────────────────────────────────────────────
+
+
+def test_add_fetch_parser() -> None:
+    parser = argparse.ArgumentParser()
+    add_fetch_parser(parser.add_subparsers())
+
+    args = parser.parse_args(
+        [
+            "fetch",
+            "mobilenet_v2",
+            "-r",
+            "tflite",
+            "-i",
+            "--sdk-version",
+            "QAIRT=2.20",
+            "LiteRT=1.4.4",
+        ]
+    )
+    assert args.model == "mobilenet_v2"
+    assert args.runtime == "tflite"
+    assert args.precision is None  # no implicit default
+    assert args.info is True
+    # nargs="+" collects multiple values, lowercased.
+    assert args.sdk_version == ["qairt=2.20", "litert=1.4.4"]
+
+    # chipset and device are mutually exclusive.
+    with pytest.raises(SystemExit):
+        parser.parse_args(["fetch", "m", "-r", "tflite", "-c", "c", "-d", "d"])

@@ -480,13 +480,9 @@ class TestGetModelAssetDetails:
             get_model_asset_details,
         )
 
-        with patch(
-            "qai_hub_models_cli.proto_helpers.release_assets.get_runtime_info",
-            return_value=RuntimeInfo(is_aot_compiled=False),
-        ):
-            asset = get_model_asset_details(
-                _model_release_assets(), _platform_info(), "tflite", "float"
-            )
+        asset = get_model_asset_details(
+            _model_release_assets(), _platform_info(), "tflite", "float"
+        )
         assert asset.runtime == Runtime.RUNTIME_TFLITE
 
     def test_chipset_required_for_aot(self) -> None:
@@ -494,57 +490,193 @@ class TestGetModelAssetDetails:
             get_model_asset_details,
         )
 
-        with (
-            patch(
-                "qai_hub_models_cli.proto_helpers.release_assets.get_runtime_info",
-                return_value=RuntimeInfo(is_aot_compiled=True),
-            ),
-            pytest.raises(FileNotFoundError, match="Chipset is required"),
-        ):
+        with pytest.raises(FileNotFoundError, match="Chipset is required"):
             get_model_asset_details(
-                _model_release_assets(),
-                _platform_info(),
-                "qnn_context_binary",
-                "float",
+                _model_release_assets(), _platform_info(), "qnn_context_binary", "float"
             )
 
-    def test_chipset_lookup(self) -> None:
+    @pytest.mark.parametrize(
+        "target",
+        [
+            {"chipset": "qualcomm-snapdragon-8-gen-3"},  # canonical id
+            {"chipset": "sd8gen3"},  # alias
+            {"device": "Samsung Galaxy S24"},  # device name
+        ],
+    )
+    def test_aot_lookup_by_chipset_or_device(self, target: dict[str, str]) -> None:
         from qai_hub_models_cli.proto_helpers.release_assets import (
             get_model_asset_details,
         )
 
-        with patch(
-            "qai_hub_models_cli.proto_helpers.release_assets.get_runtime_info",
-            return_value=RuntimeInfo(is_aot_compiled=True),
-        ):
-            asset = get_model_asset_details(
-                _model_release_assets(),
-                _platform_info(),
-                "qnn_context_binary",
-                "float",
-                chipset="qualcomm-snapdragon-8-gen-3",
-            )
+        asset = get_model_asset_details(
+            _model_release_assets(),
+            _platform_info(),
+            "qnn_context_binary",
+            "float",
+            **target,
+        )
         assert asset.chipset == "qualcomm-snapdragon-8-gen-3"
 
-    def test_lookup_by_alias_and_device(self) -> None:
+
+class TestFilterReleaseAssets:
+    def test_filters_by_each_field(self) -> None:
         from qai_hub_models_cli.proto_helpers.release_assets import (
-            get_model_asset_details,
+            filter_release_assets,
         )
 
-        with patch(
-            "qai_hub_models_cli.proto_helpers.release_assets.get_runtime_info",
-            return_value=RuntimeInfo(is_aot_compiled=True),
-        ):
-            # Both an alias ("sd8gen3") and a device name resolve to the chipset.
-            for kwargs in ({"chipset": "sd8gen3"}, {"device": "Samsung Galaxy S24"}):
-                asset = get_model_asset_details(
-                    _model_release_assets(),
-                    _platform_info(),
-                    "qnn_context_binary",
-                    "float",
-                    **kwargs,
-                )
-                assert asset.chipset == "qualcomm-snapdragon-8-gen-3"
+        assets, platform = _model_release_assets(), _platform_info()
+
+        # No filters: all assets, metadata preserved.
+        all_filtered = filter_release_assets(assets, platform)
+        assert len(all_filtered.assets) == 2
+        assert all_filtered.model_id == "mobilenet_v2"
+
+        # runtime narrows to the single tflite asset.
+        assert (
+            len(filter_release_assets(assets, platform, runtime="tflite").assets) == 1
+        )
+        # precision="float" matches both assets.
+        assert (
+            len(filter_release_assets(assets, platform, precision="float").assets) == 2
+        )
+
+    def test_chipset_and_device_keep_universal_assets(self) -> None:
+        from qai_hub_models_cli.proto_helpers.release_assets import (
+            filter_release_assets,
+        )
+
+        assets, platform = _model_release_assets(), _platform_info()
+
+        # A universal asset runs on any chipset, so both it and the matching
+        # chipset-specific asset are kept (chipset id and device both resolve to
+        # the same chipset).
+        expected = {"", "qualcomm-snapdragon-8-gen-3"}
+        by_chipset = filter_release_assets(
+            assets, platform, chipset="qualcomm-snapdragon-8-gen-3"
+        )
+        by_device = filter_release_assets(assets, platform, device="Samsung Galaxy S24")
+        assert {a.chipset for a in by_chipset.assets} == expected
+        assert {a.chipset for a in by_device.assets} == expected
+
+        with pytest.raises(ValueError, match="at most one"):
+            filter_release_assets(
+                assets, platform, chipset="sd8gen3", device="Samsung Galaxy S24"
+            )
+
+    def test_sdk_version_filter(self) -> None:
+        from qai_hub_models_cli.proto.shared.tool_versions_pb2 import ToolVersions
+        from qai_hub_models_cli.proto_helpers.release_assets import (
+            filter_release_assets,
+            parse_sdk_version_filters,
+        )
+
+        assets = ModelReleaseAssets(
+            aihm_version="0.45.0",
+            model_id="mobilenet_v2",
+            assets=[
+                ModelReleaseAssets.AssetDetails(
+                    precision=Precision.PRECISION_FLOAT,
+                    runtime=Runtime.RUNTIME_TFLITE,
+                    download_url="https://example.com/a.zip",
+                    tool_versions=ToolVersions(qairt="2.20", litert="1.4.4"),
+                ),
+                # No tool versions: never matches an SDK filter.
+                ModelReleaseAssets.AssetDetails(
+                    precision=Precision.PRECISION_W8A8,
+                    runtime=Runtime.RUNTIME_TFLITE,
+                    download_url="https://example.com/c.zip",
+                ),
+            ],
+        )
+        platform = _platform_info()
+
+        # tool=version syntax, substring match on the named tool's version.
+        match = filter_release_assets(
+            assets, platform, sdk_versions=parse_sdk_version_filters(["qairt=2.20"])
+        )
+        assert [a.download_url for a in match.assets] == ["https://example.com/a.zip"]
+        assert not filter_release_assets(
+            assets, platform, sdk_versions=parse_sdk_version_filters(["qairt=9.99"])
+        ).assets
+
+        # Multiple filters are ANDed: both must match the same asset.
+        both = parse_sdk_version_filters(["qairt=2.20", "litert=1.4.4"])
+        assert [
+            a.download_url
+            for a in filter_release_assets(assets, platform, sdk_versions=both).assets
+        ] == ["https://example.com/a.zip"]
+        assert not filter_release_assets(
+            assets,
+            platform,
+            sdk_versions=parse_sdk_version_filters(["qairt=2.20", "litert=9.9"]),
+        ).assets
+
+        # Bad syntax is rejected at parse time; an unknown tool at match time.
+        with pytest.raises(ValueError, match="tool=version"):
+            parse_sdk_version_filters(["2.20"])
+        with pytest.raises(ValueError, match="Unknown SDK tool"):
+            filter_release_assets(
+                assets, platform, sdk_versions=parse_sdk_version_filters(["foo=1.0"])
+            )
+
+
+class TestFormatFetchCommands:
+    def test_prefills_known_values_and_chipset_hints(self) -> None:
+        from qai_hub_models_cli.proto_helpers.release_assets import (
+            format_fetch_commands,
+        )
+
+        # Known runtime is filled in; unset precision stays a placeholder. The
+        # fixture has a chipset-specific asset, so the device hint/flag appear.
+        out = format_fetch_commands(
+            _model_release_assets(), "mobilenet_v2", runtime="tflite"
+        )
+        assert "-r tflite -p <precision>" in out
+        assert "See devices per chipset" in out
+        assert "[ -c '<chipset>' || -d '<device>' ]" in out
+
+        # An explicit chipset replaces the placeholder flag (quoted for spaces).
+        out = format_fetch_commands(
+            _model_release_assets(), "mobilenet_v2", chipset="Snapdragon 8 Gen 3"
+        )
+        assert "-c 'Snapdragon 8 Gen 3'" in out
+
+    def test_echoes_sdk_version_filters(self) -> None:
+        from qai_hub_models_cli.proto_helpers.release_assets import (
+            format_fetch_commands,
+        )
+
+        out = format_fetch_commands(
+            _model_release_assets(),
+            "mobilenet_v2",
+            sdk_versions={"qairt": "2.20", "litert": "1.4.4"},
+        )
+        assert "-s 'qairt=2.20'" in out
+        assert "-s 'litert=1.4.4'" in out
+
+    def test_subset_adds_see_all_hint(self) -> None:
+        from qai_hub_models_cli.proto_helpers.release_assets import (
+            format_fetch_commands,
+        )
+
+        assert "See all assets" not in format_fetch_commands(
+            _model_release_assets(), "mobilenet_v2"
+        )
+        assert "See all assets" in format_fetch_commands(
+            _model_release_assets(), "mobilenet_v2", subset=True
+        )
+
+    def test_url_only_relabels_and_adds_flag(self) -> None:
+        from qai_hub_models_cli.proto_helpers.release_assets import (
+            format_fetch_commands,
+        )
+
+        out = format_fetch_commands(
+            _model_release_assets(), "mobilenet_v2", url_only=True
+        )
+        assert "Get an asset URL" in out
+        assert "Download an asset" not in out
+        assert "--url-only" in out
 
 
 # ── platform.py ───────────────────────────────────────────────────────
