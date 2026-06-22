@@ -14,8 +14,8 @@ from qai_hub_models import (
     Precision,
     TargetRuntime,
 )
-from qai_hub_models.datasets.mpiigaze import MPIIGazeDataset
 from qai_hub_models.evaluators.mpigaze_evaluator import MPIIGazeEvaluator
+from qai_hub_models.models.eyegaze.dataset import MPIIGazeDataset
 from qai_hub_models.models.eyegaze.external_repos.gaze_estimation.models.eyenet import (
     EyeNet,
 )

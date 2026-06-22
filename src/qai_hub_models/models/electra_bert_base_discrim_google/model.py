@@ -11,7 +11,7 @@ import torch
 from transformers import ElectraForPreTraining, ElectraTokenizer
 from typing_extensions import Self
 
-from qai_hub_models.datasets.wikitext_masked import ElectraWikiTextMasked
+from qai_hub_models.datasets.wikitext import ElectraWikiTextMasked
 from qai_hub_models.evaluators.electra_discriminator_evaluator import (
     ElectraDiscriminatorEvaluator,
 )

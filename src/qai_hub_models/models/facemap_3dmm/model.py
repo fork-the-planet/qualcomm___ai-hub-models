@@ -10,9 +10,11 @@ from torch import nn
 from typing_extensions import Self
 
 from qai_hub_models import SampleInputsType
-from qai_hub_models.datasets.coco_face import CocoFaceDataset
-from qai_hub_models.datasets.facemap_3dmm_dataset import FaceMap3DMMDataset
 from qai_hub_models.evaluators.facemap_3dmm_evaluator import FaceMap3DMMEvaluator
+from qai_hub_models.models.facemap_3dmm.dataset import (
+    CocoFaceDataset,
+    FaceMap3DMMDataset,
+)
 from qai_hub_models.models.facemap_3dmm.resnet_score_rgb import resnet18_wd2
 from qai_hub_models.utils.asset_loaders import (
     CachedWebModelAsset,

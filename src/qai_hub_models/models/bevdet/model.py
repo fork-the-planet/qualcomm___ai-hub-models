@@ -14,10 +14,10 @@ from typing_extensions import Self
 
 from qai_hub_models import Precision, SampleInputsType, TargetRuntime
 from qai_hub_models.datasets.nuscenes import NuscenesDataset
-from qai_hub_models.evaluators.nuscenes_evaluator import (
+from qai_hub_models.extern.mmdet import patch_mmdet_no_build_deps
+from qai_hub_models.models.bevdet.evaluator import (
     NuscenesObjectDetectionEvaluator,
 )
-from qai_hub_models.extern.mmdet import patch_mmdet_no_build_deps
 from qai_hub_models.models.bevdet.external_repos import EXTERNAL_REPO_PATHS
 from qai_hub_models.models.bevdet.external_repos.bevdet.mmdet3d.core.bbox.coders.centerpoint_bbox_coders import (
     CenterPointBBoxCoder,

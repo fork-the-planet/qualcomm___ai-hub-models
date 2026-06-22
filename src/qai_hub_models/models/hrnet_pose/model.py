@@ -10,7 +10,7 @@ from torch import nn
 from typing_extensions import Self
 
 from qai_hub_models import SampleInputsType
-from qai_hub_models.datasets.cocobody import CocoBodyDataset
+from qai_hub_models.datasets.coco import CocoBodyDataset
 from qai_hub_models.datasets.mpii import MPIIDataset
 from qai_hub_models.evaluators.hrnet_evaluator import HRNetPoseEvaluator
 from qai_hub_models.evaluators.pose_evaluator import MPIIPoseEvaluator

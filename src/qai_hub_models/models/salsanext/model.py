@@ -12,8 +12,8 @@ from ruamel.yaml import YAML
 from typing_extensions import Self
 
 from qai_hub_models import SampleInputsType
-from qai_hub_models.datasets.semantic_kitti import SemanticKittiDataset
 from qai_hub_models.evaluators.semantic_kitti_evaluator import SemanticKittiEvaluator
+from qai_hub_models.models.salsanext.dataset import SemanticKittiDataset
 from qai_hub_models.models.salsanext.external_repos.salsanext.train.common.laserscan import (
     SemLaserScan,
 )

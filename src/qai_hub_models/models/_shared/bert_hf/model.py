@@ -14,7 +14,7 @@ from qai_hub_models import (
     Precision,
     TargetRuntime,
 )
-from qai_hub_models.datasets.wikitext_masked import WikiTextMasked
+from qai_hub_models.datasets.wikitext import WikiTextMasked
 from qai_hub_models.evaluators.maskedlm_evaluator import MaskedLMEvaluator
 from qai_hub_models.utils.base_dataset import BaseDataset
 from qai_hub_models.utils.base_evaluator import BaseEvaluator

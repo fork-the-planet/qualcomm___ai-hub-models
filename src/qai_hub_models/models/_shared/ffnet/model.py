@@ -12,7 +12,7 @@ from typing import TypeVar
 import torch
 from typing_extensions import Self
 
-from qai_hub_models.datasets.cityscapes_lowres import CityscapesLowResDataset
+from qai_hub_models.datasets.cityscapes import CityscapesLowResDataset
 from qai_hub_models.models._shared.cityscapes_segmentation.model import (
     CityscapesSegmentor,
 )

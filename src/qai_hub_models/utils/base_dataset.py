@@ -10,7 +10,7 @@ import inspect
 import os
 import shutil
 from abc import ABC, abstractmethod
-from collections.abc import Sized
+from collections.abc import Mapping, Sized
 from copy import copy
 from enum import Enum, unique
 from functools import cached_property
@@ -27,6 +27,7 @@ __all__ = [
     "BaseDataset",
     "DatasetMetadata",
     "DatasetSplit",
+    "InterleavedDataset",
     "get_folder_name",
     "instantiate_dataset",
 ]
@@ -173,6 +174,100 @@ class BaseDataset(Dataset, Sized, ABC):
     def get_dataset_metadata() -> DatasetMetadata:
         """Metadata about the dataset. Used for publishing on the website."""
         raise NotImplementedError()
+
+    @classmethod
+    def configure(cls, files: list[str | os.PathLike]) -> None:
+        """Configure the dataset from local files (download/extract/symlink).
+
+        Datasets that require external setup (e.g. files behind a license
+        wall, large archives users must download manually) should override
+        this. Implementations typically forward `files` to the constructor.
+
+        The expected file ordering and meaning is defined per-dataset; see
+        each subclass's override.
+        """
+        raise NotImplementedError(
+            f"{cls.__name__} does not require external configuration. "
+            "If this dataset can be auto-downloaded, just instantiate it; "
+            "otherwise the dataset author should override `configure()`."
+        )
+
+
+class InterleavedDataset(BaseDataset):
+    """Base class for datasets that interleave multiple source datasets.
+
+    Items are selected in round-robin order: index ``i`` maps to dataset
+    ``i % N`` and item ``i // N``. The total length is
+    ``min_dataset_len * N`` so every dataset is exhausted evenly.
+
+    Subclasses must implement ``dataset_name`` and ``load_datasets``.
+    """
+
+    def __init__(
+        self,
+        split: DatasetSplit = DatasetSplit.TRAIN,
+        num_samples: int = 0,
+        **kwargs: Any,
+    ) -> None:
+        self._datasets = self.load_datasets(split, **kwargs)
+        assert len(self._datasets) > 0
+        self._min_len = min(len(ds) for ds in self._datasets)
+        self.num_samples = num_samples
+
+    @classmethod
+    @abstractmethod
+    def dataset_name(cls) -> str:
+        """CLI-friendly name for this interleaved dataset."""
+
+    @abstractmethod
+    def load_datasets(self, split: DatasetSplit, **kwargs: Any) -> list[BaseDataset]:
+        """Construct the source datasets to interleave."""
+
+    @staticmethod
+    def collate_fn(
+        batch: list[dict[str, Any]],
+    ) -> tuple[Any, ...]:
+        item = batch[0]
+        if (
+            isinstance(item, Mapping)
+            and "input_ids" in item
+            and "attention_mask" in item
+        ):
+            result: tuple[Any, ...] = (
+                item["input_ids"],
+                item["attention_mask"],
+                item.get("label", item["input_ids"]),
+            )
+            for key in ("pixel_values", "image_grid_thw"):
+                if key in item:
+                    result = (*result, item[key])
+            return result
+        return tuple(batch)
+
+    def __len__(self) -> int:
+        total = self._min_len * len(self._datasets)
+        if self.num_samples > 0:
+            return min(self.num_samples, total)
+        return total
+
+    def __getitem__(self, idx: int) -> Any:
+        ds_idx = idx % len(self._datasets)
+        item_idx = idx // len(self._datasets)
+        return self._datasets[ds_idx][item_idx]
+
+    def _download_data(self) -> None:
+        pass
+
+    @staticmethod
+    def default_samples_per_job() -> int:
+        return 1
+
+    @staticmethod
+    def get_dataset_metadata() -> DatasetMetadata:
+        return DatasetMetadata(
+            link="",
+            split_description="Interleaved from multiple source datasets",
+        )
 
 
 def instantiate_dataset(

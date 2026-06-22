@@ -12,7 +12,7 @@ from hydra import compose, initialize_config_dir
 from typing_extensions import Self
 
 from qai_hub_models import Precision
-from qai_hub_models.datasets.nuscenes_bev import NuscenesBevGKTDataset
+from qai_hub_models.datasets.nuscenes import NuscenesBevGKTDataset
 from qai_hub_models.evaluators.nuscenes_bev_evaluator import (
     NuscenesBevSegmentationEvaluator,
 )

@@ -20,8 +20,7 @@ from qai_hub_models import Precision
 # resolve the inherited get_input_spec's "llm_io_type" annotation, which it
 # looks up in the concrete model's module.
 from qai_hub_models.datasets import instantiate_dataset
-from qai_hub_models.datasets.wikitext import WikiText
-from qai_hub_models.datasets.wikitext_ja import WikiText_Japanese
+from qai_hub_models.datasets.wikitext import WikiText, WikiTextJapanese
 from qai_hub_models.models._shared.llama3.model import (
     LlamaPartBase,
     LlamaPreSplitBase,
@@ -153,7 +152,7 @@ class Llama3_Elyza_JP_8B_QuantizablePreSplit(
             collate_fn=dataset_eng.collate_fn,
         )
         dataset_ja = instantiate_dataset(
-            WikiText_Japanese,
+            WikiTextJapanese,
             DatasetSplit.TRAIN,
             input_spec=None,
             tokenizer=self.tokenizer,

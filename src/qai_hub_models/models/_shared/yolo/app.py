@@ -14,7 +14,7 @@ import torch.nn.functional as F
 from PIL import Image
 from torchvision.transforms import Resize
 
-from qai_hub_models.datasets.coco_keypoints import COCO_SKELETON
+from qai_hub_models.datasets.coco import COCO_SKELETON
 from qai_hub_models.models._shared.yolo.utils import detect_postprocess
 from qai_hub_models.utils.bounding_box_processing import (
     batched_nms,

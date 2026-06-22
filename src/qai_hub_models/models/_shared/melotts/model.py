@@ -28,7 +28,11 @@ from qai_hub_models import (
     TargetRuntime,
 )
 from qai_hub_models.configs.model_metadata import ModelMetadata
-from qai_hub_models.datasets.common_voice import CommonVoiceText
+from qai_hub_models.datasets.common_voice import (
+    LANG_CODE_MAP,
+    CommonVoiceText,
+    TTSLanguage,
+)
 from qai_hub_models.models._shared.common import replace_module_recursively
 from qai_hub_models.models._shared.melotts.meloTTS_encoder import (
     FFNMod,
@@ -40,11 +44,7 @@ from qai_hub_models.models._shared.melotts.utils import (
     download_unidic,
     write_melotts_supplementary_files,
 )
-from qai_hub_models.models._shared.voiceai_tts.language import (
-    BERT_MODEL_IDS,
-    LANG_CODE_MAP,
-    TTSLanguage,
-)
+from qai_hub_models.models._shared.voiceai_tts.language import BERT_MODEL_IDS
 from qai_hub_models.models._shared.voiceai_tts.t5_g2p import (
     T5Decoder as _T5DecoderBase,
 )

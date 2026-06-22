@@ -14,7 +14,7 @@ from torch import nn
 from typing_extensions import Self
 
 from qai_hub_models import Precision, SampleInputsType
-from qai_hub_models.datasets.cocobody import CocoBodyDataset
+from qai_hub_models.datasets.coco import CocoBodyDataset
 from qai_hub_models.evaluators.posenet_mobilenet_evaluator import (
     PosenetMobilenetEvaluator,
 )

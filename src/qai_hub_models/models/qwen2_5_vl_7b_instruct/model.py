@@ -54,7 +54,7 @@ from qai_hub_models import (
 )
 from qai_hub_models.configs.model_metadata import ModelMetadata
 from qai_hub_models.configs.tensor_spec import TensorSpec
-from qai_hub_models.datasets.imagenette import IMAGENETTE_ASSET
+from qai_hub_models.datasets.imagenet import IMAGENETTE_ASSET
 from qai_hub_models.models._shared.llm.common import LLMIOType
 from qai_hub_models.models._shared.llm.generator_factory import (
     HubCompatibleVLMGenerator,

@@ -16,6 +16,7 @@ from typing_extensions import Self
 from qai_hub_models import TargetRuntime
 from qai_hub_models.configs.model_metadata import ModelMetadata
 from qai_hub_models.configs.tool_versions import ToolVersions
+from qai_hub_models.datasets.common_voice import LANG_CODE_MAP, TTSLanguage
 from qai_hub_models.models._shared.voiceai_tts.generate_bert_binary_rules import (
     generate_bert_tokenizer_binary,
 )
@@ -24,9 +25,7 @@ from qai_hub_models.models._shared.voiceai_tts.generate_unicode_bin import (
 )
 from qai_hub_models.models._shared.voiceai_tts.language import (
     BERT_MODEL_IDS,
-    LANG_CODE_MAP,
     LANG_ID_MAP,
-    TTSLanguage,
 )
 from qai_hub_models.utils.base_config import BaseQAIHMConfig
 

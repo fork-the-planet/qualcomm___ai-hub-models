@@ -16,7 +16,7 @@ from easyocr.model.modules import BidirectionalLSTM
 from easyocr.model.vgg_model import Model as VGGRecognizer
 from typing_extensions import Self
 
-from qai_hub_models.datasets.icdar2015 import ICDAR2015Dataset
+from qai_hub_models.models.easyocr.dataset import ICDAR2015Dataset
 from qai_hub_models.utils.base_collection_model import WorkbenchModelCollection
 from qai_hub_models.utils.base_dataset import BaseDataset
 from qai_hub_models.utils.base_model import (

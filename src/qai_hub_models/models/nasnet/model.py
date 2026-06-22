@@ -12,8 +12,7 @@ from timm.models.nasnet import CellStem1, FirstCell
 from typing_extensions import Self
 
 from qai_hub_models import Precision
-from qai_hub_models.datasets.imagenet import ImagenetDataset
-from qai_hub_models.datasets.imagenette import ImagenetteDataset
+from qai_hub_models.datasets.imagenet import ImagenetDataset, ImagenetteDataset
 from qai_hub_models.models._shared.imagenet_classifier.model import (
     TEST_IMAGENET_IMAGE,
     ImagenetClassifier,

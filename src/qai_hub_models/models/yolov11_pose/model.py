@@ -13,7 +13,7 @@ from ultralytics.models import YOLO as ultralytics_YOLO
 from ultralytics.nn.tasks import PoseModel
 
 from qai_hub_models import Precision
-from qai_hub_models.datasets.coco_keypoints import CocoKeypointsDataset
+from qai_hub_models.datasets.coco import CocoKeypointsDataset
 from qai_hub_models.models._shared.ultralytics.pose_patches import (
     patch_ultralytics_pose_head,
 )

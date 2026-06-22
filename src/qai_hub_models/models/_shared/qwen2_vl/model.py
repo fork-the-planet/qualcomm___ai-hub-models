@@ -939,7 +939,9 @@ class Qwen2VLDynamic_AIMETOnnx(LLMDynamic_AIMETOnnx, Qwen2VLTextBase_AIMETOnnx):
     ) -> DatasetEntries | None:
         """Get interleaved (wikitext + AOKVQA) calibration data for VLM."""
         from qai_hub_models.datasets import instantiate_dataset
-        from qai_hub_models.datasets.interleaved import InterleavedAOKVQAWikitext
+        from qai_hub_models.datasets.wikitext.interleaved_aokvqa_wikitext import (
+            InterleavedAOKVQAWikitext,
+        )
 
         if num_samples == 0:
             num_samples = math.ceil(80000 / context_length)

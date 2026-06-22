@@ -23,8 +23,10 @@ from qai_hub_models import (
     SampleInputsType,
     TargetRuntime,
 )
-from qai_hub_models.datasets.libri_speech import LibriSpeechDataset
 from qai_hub_models.evaluators.libri_speech_evaluator import LibriSpeechEvaluator
+from qai_hub_models.models.huggingface_wavlm_base_plus.dataset import (
+    LibriSpeechDataset,
+)
 from qai_hub_models.utils.asset_loaders import CachedWebModelAsset, load_numpy
 from qai_hub_models.utils.base_dataset import BaseDataset
 from qai_hub_models.utils.base_evaluator import BaseEvaluator

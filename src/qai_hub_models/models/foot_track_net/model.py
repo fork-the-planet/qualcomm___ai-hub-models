@@ -12,8 +12,8 @@ from torch import nn
 from typing_extensions import Self
 
 from qai_hub_models.configs.model_metadata import ModelMetadata
-from qai_hub_models.datasets.foot_track_dataset import FootTrackDataset
 from qai_hub_models.evaluators.foot_track_evaluator import FootTrackNetEvaluator
+from qai_hub_models.models.foot_track_net.dataset import FootTrackDataset
 from qai_hub_models.models.foot_track_net.layers import (
     CBAModule,
     DetectModule,

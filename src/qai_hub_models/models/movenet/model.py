@@ -14,7 +14,7 @@ from qai_hub_models import (
     Precision,
     TargetRuntime,
 )
-from qai_hub_models.datasets.cocobody import CocoBodyDataset
+from qai_hub_models.datasets.coco import CocoBodyDataset
 from qai_hub_models.evaluators.movenet_evaluator import MovenetPoseEvaluator
 from qai_hub_models.models.movenet.external_repos import EXTERNAL_REPO_PATHS
 from qai_hub_models.models.movenet.external_repos.movenet_pytorch.movenet.models.model_factory import (

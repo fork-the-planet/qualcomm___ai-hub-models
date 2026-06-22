@@ -7,8 +7,8 @@ from __future__ import annotations
 
 import torch
 
+from qai_hub_models.datasets.kinetics400 import preprocess_video_224
 from qai_hub_models.models._shared.video_classifier.app import KineticsClassifierApp
-from qai_hub_models.models._shared.video_classifier.utils import preprocess_video_224
 
 
 class VideoMAEApp(KineticsClassifierApp):

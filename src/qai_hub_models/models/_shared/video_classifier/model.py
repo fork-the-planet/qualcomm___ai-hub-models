@@ -8,14 +8,14 @@ from __future__ import annotations
 import torch
 
 from qai_hub_models import SampleInputsType
-from qai_hub_models.datasets.kinetics400 import Kinetics400Dataset
-from qai_hub_models.evaluators.video_classification_evaluator import (
-    VideoClassificationEvaluator,
-)
-from qai_hub_models.models._shared.video_classifier.utils import (
+from qai_hub_models.datasets.kinetics400 import (
     DEFAULT_NUM_VIEWS,
+    Kinetics400Dataset,
     preprocess_video_kinetics_400,
     read_video_at_fps,
+)
+from qai_hub_models.evaluators.video_classification_evaluator import (
+    VideoClassificationEvaluator,
 )
 from qai_hub_models.utils.asset_loaders import CachedWebModelAsset
 from qai_hub_models.utils.base_dataset import BaseDataset

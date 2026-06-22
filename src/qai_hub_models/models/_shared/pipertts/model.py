@@ -18,14 +18,13 @@ from qai_hub_models import (
     TargetRuntime,
 )
 from qai_hub_models.configs.model_metadata import ModelMetadata
-from qai_hub_models.datasets.common_voice import CommonVoiceText
+from qai_hub_models.datasets.common_voice import CommonVoiceText, TTSLanguage
 from qai_hub_models.models._shared.pipertts.pipertts_metadata_json import (
     write_pipertts_supplementary_files,
 )
 from qai_hub_models.models._shared.pipertts.util import (
     build_model_from_onnx,
 )
-from qai_hub_models.models._shared.voiceai_tts.language import TTSLanguage
 from qai_hub_models.models._shared.voiceai_tts.t5_g2p import (
     T5Decoder,
     T5Encoder,

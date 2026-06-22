@@ -10,8 +10,8 @@ from torch import nn
 from typing_extensions import Self
 
 from qai_hub_models import Precision
-from qai_hub_models.datasets.face_det_lite import FaceDetLiteDataset
 from qai_hub_models.evaluators.face_det_lite_evaluator import FaceDetLiteEvaluator
+from qai_hub_models.models.face_det_lite.dataset import FaceDetLiteDataset
 from qai_hub_models.models.face_det_lite.layers import (
     CBAModule,
     DetectModule,

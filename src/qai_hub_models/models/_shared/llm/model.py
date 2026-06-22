@@ -2114,7 +2114,7 @@ class LLMBase(BaseModel, LLMConfigEditor, ABC):
 
     @classmethod
     def get_eval_dataset_classes(cls) -> list[type[BaseDataset]]:
-        from qai_hub_models.datasets.mmmlu import mmmlu_dataset_classes
+        from qai_hub_models.datasets.mmlu import mmmlu_dataset_classes
         from qai_hub_models.datasets.prompts import TextPrompts
 
         return [*mmmlu_dataset_classes(), TextPrompts]

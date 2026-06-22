@@ -5,6 +5,7 @@
 import nltk
 from typing_extensions import Self
 
+from qai_hub_models.datasets.common_voice import TTSLanguage
 from qai_hub_models.models._shared.melotts.model import (
     BertWrapper,
     Decoder,
@@ -15,7 +16,6 @@ from qai_hub_models.models._shared.melotts.model import (
     T5Encoder,
     get_tts_object,
 )
-from qai_hub_models.models._shared.voiceai_tts.language import TTSLanguage
 
 MODEL_ID = __name__.split(".")[-2]
 

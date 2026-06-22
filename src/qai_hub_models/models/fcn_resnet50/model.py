@@ -8,8 +8,8 @@ from __future__ import annotations
 import torchvision.models as tv_models
 from typing_extensions import Self
 
-from qai_hub_models.datasets.coco_voc_seg import CocoVocSegDataset
 from qai_hub_models.models._shared.deeplab.model import DeepLabV3Model
+from qai_hub_models.models.fcn_resnet50.dataset import CocoVocSegDataset
 from qai_hub_models.utils.base_dataset import BaseDataset
 
 MODEL_ID = __name__.split(".")[-2]

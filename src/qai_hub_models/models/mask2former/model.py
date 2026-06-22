@@ -21,11 +21,11 @@ from qai_hub_models import (
     Precision,
     TargetRuntime,
 )
-from qai_hub_models.datasets.coco_panoptic_seg import CocoPanopticSegmentationDataset
-from qai_hub_models.evaluators.panoptic_segmentation_evaluator import (
+from qai_hub_models.models._shared.common import replace_module_recursively
+from qai_hub_models.models.mask2former.dataset import CocoPanopticSegmentationDataset
+from qai_hub_models.models.mask2former.evaluator import (
     PanopticSegmentationEvaluator,
 )
-from qai_hub_models.models._shared.common import replace_module_recursively
 from qai_hub_models.models.mask2former.model_patches import (
     PatchedMask2FormerMaskPredictor,
     PatchedMask2FormerPixelDecoderEncoderMultiscaleDeformableAttention,

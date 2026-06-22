@@ -18,6 +18,7 @@ from torch import Tensor
 from torch.utils.data import DataLoader
 
 from qai_hub_models.datasets import DatasetSplit, instantiate_dataset
+from qai_hub_models.datasets.common_voice import TTSLanguage
 from qai_hub_models.models._shared.pipertts.model import (
     DEC_SEQ_OVERLAP,
     DEFAULT_LENGTH_SCALE,
@@ -41,7 +42,6 @@ from qai_hub_models.models._shared.voiceai_tts.app_utils import (
     calibrate_charsiu_encoder,
     generate_path,
 )
-from qai_hub_models.models._shared.voiceai_tts.language import TTSLanguage
 from qai_hub_models.utils.base_app import CollectionAppQuantizeProtocol
 from qai_hub_models.utils.evaluate import sample_dataset
 from qai_hub_models.utils.input_spec import InputSpec, get_batch_size

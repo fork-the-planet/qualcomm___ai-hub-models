@@ -13,7 +13,7 @@ and asset locations.
 from __future__ import annotations
 
 from qai_hub_models.configs.model_metadata import ModelMetadata
-from qai_hub_models.models._shared.voiceai_tts.language import TTSLanguage
+from qai_hub_models.datasets.common_voice import TTSLanguage
 from qai_hub_models.models._shared.voiceai_tts.tts_metadata import TTSMetadata
 from qai_hub_models.utils.base_config import BaseQAIHMConfig
 

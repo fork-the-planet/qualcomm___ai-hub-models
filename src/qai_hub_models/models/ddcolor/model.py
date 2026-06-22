@@ -12,8 +12,8 @@ from typing_extensions import Self
 
 from qai_hub_models import Precision
 from qai_hub_models.configs.model_metadata import ModelMetadata
-from qai_hub_models.datasets.imagenet_colorization import ImagenetColorizationDataset
-from qai_hub_models.datasets.imagenette_colorization import (
+from qai_hub_models.datasets.imagenet import (
+    ImagenetColorizationDataset,
     ImagenetteColorizationDataset,
 )
 from qai_hub_models.evaluators.colorization_evaluator import ColorizationEvaluator

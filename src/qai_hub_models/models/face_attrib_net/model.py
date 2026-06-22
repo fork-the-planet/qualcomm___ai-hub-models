@@ -9,8 +9,8 @@ import torch
 from torch import nn
 from typing_extensions import Self
 
-from qai_hub_models.datasets.face_attrib_dataset import FaceAttribDataset
 from qai_hub_models.evaluators.face_attrib_evaluator import FaceAttribNetEvaluator
+from qai_hub_models.models.face_attrib_net.dataset import FaceAttribDataset
 from qai_hub_models.models.face_attrib_net.layers import (
     Conv2dBlock,
     DownsampleBlock,

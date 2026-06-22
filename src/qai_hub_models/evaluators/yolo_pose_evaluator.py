@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import torch
 
-from qai_hub_models.datasets.coco_keypoints import COCO_KPT_PERSON_ANNOTATIONS_PATH
+from qai_hub_models.datasets.coco import COCO_KPT_PERSON_ANNOTATIONS_PATH
 from qai_hub_models.evaluators.pose_evaluator import CocoBodyPoseEvaluator
 from qai_hub_models.extern.xtcocotools.coco import COCO
 from qai_hub_models.utils.bounding_box_processing import batched_nms

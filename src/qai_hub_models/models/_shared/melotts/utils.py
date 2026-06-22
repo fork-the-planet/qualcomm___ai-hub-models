@@ -12,10 +12,10 @@ from platformdirs import user_cache_path
 from unidic.download import download_version as _download_unidic
 
 from qai_hub_models.configs.model_metadata import ModelMetadata
+from qai_hub_models.datasets.common_voice import TTSLanguage
 from qai_hub_models.models._shared.melotts.meloTTS_metadata_json import (
     create_tts_metadata,
 )
-from qai_hub_models.models._shared.voiceai_tts.language import TTSLanguage
 from qai_hub_models.models._shared.voiceai_tts.tts_metadata import (
     write_tts_supplementary_files,
 )

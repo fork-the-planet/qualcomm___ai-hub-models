@@ -38,12 +38,12 @@ from transformers.modeling_attn_mask_utils import AttentionMaskConverter
 from transformers.models.phi3 import Phi3Config, modeling_phi3
 
 from qai_hub_models import Precision
-from qai_hub_models.datasets.tricky_llm_prompts import TrickyLLMPromptsPhi35
 from qai_hub_models.models._shared.llm.common import LLMIOType
 from qai_hub_models.models._shared.llm.model import (
     Embedding,
     PositionProcessorBase,
 )
+from qai_hub_models.models._shared.phi.dataset import TrickyLLMPromptsPhi35
 from qai_hub_models.models._shared.phi.model_adaptations import (
     Phi35SHAAttention,
     QcPhi3_apply_rotary_pos_emb,

@@ -11,8 +11,8 @@ import torch
 from torch import nn
 from typing_extensions import Self
 
-from qai_hub_models.datasets.cofw import COFWDataset
 from qai_hub_models.evaluators.hrnet_face_evaluator import HRNetFaceEvaluator
+from qai_hub_models.models.hrnet_face.dataset import COFWDataset
 from qai_hub_models.models.hrnet_face.external_repos import EXTERNAL_REPO_PATHS
 from qai_hub_models.models.hrnet_face.external_repos.hrnet_facial_landmark_detection.lib.config import (
     config,

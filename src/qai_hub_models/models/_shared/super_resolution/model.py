@@ -8,7 +8,7 @@ from __future__ import annotations
 import torch
 
 from qai_hub_models import SampleInputsType
-from qai_hub_models.datasets.bsd300 import BSD300Dataset
+from qai_hub_models.datasets.bsd import BSD300Dataset
 from qai_hub_models.evaluators.superres_evaluator import SuperResolutionOutputEvaluator
 from qai_hub_models.utils.asset_loaders import CachedWebModelAsset, load_image
 from qai_hub_models.utils.base_dataset import BaseDataset

@@ -9,7 +9,7 @@ import torch
 from torch import nn
 from typing_extensions import Self
 
-from qai_hub_models.datasets.bsd300_denoising import BSD300DenoisingDataset
+from qai_hub_models.datasets.bsd import BSD300DenoisingDataset
 from qai_hub_models.evaluators.denoising_evaluator import DenoisingEvaluator
 from qai_hub_models.models.dncnn.external_repos.kair.models.network_dncnn import (
     DnCNN as KairDnCNN,

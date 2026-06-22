@@ -172,7 +172,7 @@ class TextEncoderQuantizableBase(AIMETOnnxQuantizableMixin, TextEncoderBase):
         return cls(quant_sim, host_device=host_device, onnx_bundle=bundle)
 
     def get_calibration_dataset_cls(self) -> type[BaseDataset]:
-        from qai_hub_models.datasets.stable_diffusion_calib import (
+        from qai_hub_models.models._shared.stable_diffusion.dataset import (
             StableDiffusionCalibDatasetTextEncoder,
         )
 
@@ -320,7 +320,7 @@ class UnetQuantizableBase(AIMETOnnxQuantizableMixin, UnetBase):
         return cls(quant_sim, host_device=host_device, onnx_bundle=bundle)
 
     def get_calibration_dataset_cls(self) -> type[BaseDataset]:
-        from qai_hub_models.datasets.stable_diffusion_calib import (
+        from qai_hub_models.models._shared.stable_diffusion.dataset import (
             StableDiffusionCalibDatasetUnet,
         )
 
@@ -445,7 +445,7 @@ class VaeDecoderQuantizableBase(AIMETOnnxQuantizableMixin, VaeDecoderBase):
         )
 
     def get_calibration_dataset_cls(self) -> type[BaseDataset]:
-        from qai_hub_models.datasets.stable_diffusion_calib import (
+        from qai_hub_models.models._shared.stable_diffusion.dataset import (
             StableDiffusionCalibDatasetVae,
         )
 

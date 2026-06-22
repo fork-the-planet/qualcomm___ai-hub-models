@@ -9,8 +9,8 @@ import torch
 from typing_extensions import Self
 
 from qai_hub_models import SampleInputsType
-from qai_hub_models.datasets.carvana import CarvanaDataset
 from qai_hub_models.evaluators.segmentation_evaluator import SegmentationOutputEvaluator
+from qai_hub_models.models.unet_segmentation.dataset import CarvanaDataset
 from qai_hub_models.utils.asset_loaders import (
     CachedWebModelAsset,
     load_image,

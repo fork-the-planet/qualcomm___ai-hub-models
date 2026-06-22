@@ -15,7 +15,7 @@ from __future__ import annotations
 import os
 
 from qai_hub_models.configs.model_metadata import ModelMetadata
-from qai_hub_models.models._shared.voiceai_tts.language import TTSLanguage
+from qai_hub_models.datasets.common_voice import TTSLanguage
 from qai_hub_models.models._shared.voiceai_tts.tts_metadata import (
     TTSMetadata,
     write_tts_supplementary_files,

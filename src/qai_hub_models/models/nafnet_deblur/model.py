@@ -10,11 +10,11 @@ from pathlib import Path
 from typing_extensions import Self
 
 from qai_hub_models import SampleInputsType
-from qai_hub_models.datasets.reds import REDSDataset
 from qai_hub_models.models._shared.nafnet.model import (
     NAFNetModel,
     _load_nafnet_source_model,
 )
+from qai_hub_models.models.nafnet_deblur.dataset import REDSDataset
 from qai_hub_models.utils.asset_loaders import (
     CachedWebModelAsset,
     load_image,

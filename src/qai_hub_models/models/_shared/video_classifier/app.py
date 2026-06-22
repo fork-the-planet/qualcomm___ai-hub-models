@@ -9,8 +9,7 @@ from pathlib import Path
 
 import torch
 
-from qai_hub_models.models._shared.video_classifier.model import KineticsClassifier
-from qai_hub_models.models._shared.video_classifier.utils import (
+from qai_hub_models.datasets.kinetics400 import (
     DEFAULT_NUM_CLIPS,
     DEFAULT_NUM_CROPS,
     get_class_name_kinetics_400,
@@ -21,6 +20,7 @@ from qai_hub_models.models._shared.video_classifier.utils import (
     sample_clips,
     sample_video,
 )
+from qai_hub_models.models._shared.video_classifier.model import KineticsClassifier
 
 
 def recognize_action_kinetics_400(prediction: torch.Tensor) -> list[str]:

@@ -13,7 +13,7 @@ from torch import nn
 from typing_extensions import Self
 
 from qai_hub_models import SampleInputsType
-from qai_hub_models.datasets.cocobody import CocoBodyDataset
+from qai_hub_models.datasets.coco import CocoBodyDataset
 from qai_hub_models.evaluators.centernet_pose_evaluator import CenternetPoseEvaluator
 from qai_hub_models.models._shared.centernet.external_repos.centernet.src.lib.models.decode import (
     multi_pose_decode,

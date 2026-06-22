@@ -11,15 +11,15 @@ import torch
 from typing_extensions import Self
 
 from qai_hub_models import SampleInputsType
-from qai_hub_models.datasets.kinetics400 import Kinetics400Dataset
+from qai_hub_models.datasets.kinetics400 import (
+    DEFAULT_NUM_VIEWS,
+    Kinetics400Dataset,
+    preprocess_video_224,
+    read_video_per_second,
+)
 from qai_hub_models.models._shared.video_classifier.model import (
     INPUT_VIDEO_PATH,
     KineticsClassifier,
-)
-from qai_hub_models.models._shared.video_classifier.utils import (
-    DEFAULT_NUM_VIEWS,
-    preprocess_video_224,
-    read_video_per_second,
 )
 from qai_hub_models.models.video_mae.external_repos.videomae.modeling_finetune import (
     vit_base_patch16_224,

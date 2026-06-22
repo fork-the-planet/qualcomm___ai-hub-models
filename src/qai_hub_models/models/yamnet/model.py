@@ -10,8 +10,8 @@ from torch_audioset.yamnet.model import YAMNet
 from typing_extensions import Self
 
 from qai_hub_models import SampleInputsType
-from qai_hub_models.datasets.audioset import AudioSetDataset
 from qai_hub_models.evaluators.audioset_evaluator import AudioSetOutputEvaluator
+from qai_hub_models.models.yamnet.dataset import AudioSetDataset
 from qai_hub_models.utils.asset_loaders import CachedWebModelAsset
 from qai_hub_models.utils.base_dataset import BaseDataset
 from qai_hub_models.utils.base_evaluator import BaseEvaluator

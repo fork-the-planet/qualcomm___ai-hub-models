@@ -11,8 +11,8 @@ import torch
 from typing_extensions import Self
 
 from qai_hub_models import Precision
-from qai_hub_models.datasets.eg1800 import EG1800SegmentationDataset
 from qai_hub_models.models._shared.selfie_segmentation.model import SelfieSegmentor
+from qai_hub_models.models.sinet.dataset import EG1800SegmentationDataset
 from qai_hub_models.models.sinet.external_repos.ext_portrait_segmentation.models.SINet import (
     SINet as SINetModel,
 )

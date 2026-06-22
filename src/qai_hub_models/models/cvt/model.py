@@ -18,7 +18,7 @@ from qai_hub_models import (
     Precision,
     TargetRuntime,
 )
-from qai_hub_models.datasets.nuscenes_bev import NuscenesBevCVTDataset
+from qai_hub_models.datasets.nuscenes import NuscenesBevCVTDataset
 from qai_hub_models.evaluators.nuscenes_bev_evaluator import (
     NuscenesBevSegmentationEvaluator,
 )

@@ -19,10 +19,10 @@ from transformers import AutoModel
 from transformers.utils.hub import HF_MODULES_CACHE
 from typing_extensions import Self
 
-from qai_hub_models.datasets.amazon_counterfactual import (
+from qai_hub_models.models.nomic_embed_text.dataset import (
     AmazonCounterfactualClassificationDataset,
 )
-from qai_hub_models.evaluators.mteb_classification_evaluator import (
+from qai_hub_models.models.nomic_embed_text.evaluator import (
     NomicEmbedTextEvaluator,
 )
 from qai_hub_models.utils.asset_loaders import PathLike

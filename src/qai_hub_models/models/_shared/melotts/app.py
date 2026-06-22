@@ -14,6 +14,7 @@ from torch.utils.data import DataLoader
 from transformers import AutoTokenizer
 
 from qai_hub_models.datasets import DatasetSplit, instantiate_dataset
+from qai_hub_models.datasets.common_voice import TTSLanguage
 from qai_hub_models.models._shared.melotts.model import (
     DEC_SEQ_OVERLAP,
     MAX_BERT_TOKENS,
@@ -29,10 +30,7 @@ from qai_hub_models.models._shared.melotts.model import (
 )
 from qai_hub_models.models._shared.melotts.utils import download_unidic
 from qai_hub_models.models._shared.voiceai_tts.app_utils import generate_path
-from qai_hub_models.models._shared.voiceai_tts.language import (
-    BERT_MODEL_IDS,
-    TTSLanguage,
-)
+from qai_hub_models.models._shared.voiceai_tts.language import BERT_MODEL_IDS
 from qai_hub_models.utils.base_app import CollectionAppQuantizeProtocol
 from qai_hub_models.utils.evaluate import sample_dataset
 from qai_hub_models.utils.input_spec import InputSpec, get_batch_size
