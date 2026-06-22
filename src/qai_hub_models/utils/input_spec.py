@@ -9,6 +9,7 @@ from typing import Any, TypeGuard
 
 import numpy as np
 import torch
+from qai_hub import InputSpecs
 
 from qai_hub_models import SampleInputsType, TargetRuntime
 from qai_hub_models.configs.tensor_spec import (
@@ -49,7 +50,12 @@ __all__ = [
     "make_torch_inputs",
     "str_to_torch_dtype",
     "to_hub_input_specs",
+    "workbench_to_qihm_input_spec",
 ]
+
+
+def workbench_to_qihm_input_spec(input_spec: InputSpecs) -> InputSpec:
+    return {k: TensorSpec.from_workbench_spec(s) for k, s in input_spec.items()}
 
 
 def to_hub_input_specs(

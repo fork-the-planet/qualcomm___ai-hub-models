@@ -23,7 +23,7 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from enum import Enum
-from typing import Any, Literal, overload
+from typing import Any, Literal, cast, overload
 
 from pydantic import Field
 from qai_hub_models_cli.proto.shared import range_pb2, tensor_spec_pb2
@@ -198,6 +198,18 @@ class TensorSpec(BaseQAIHMConfig):
     softmax_applied: bool = False
     labels_file: str | None = None
     apply_runtime_channel_reordering: bool = Field(default=False, exclude=True)
+
+    @classmethod
+    def from_workbench_spec(
+        cls, spec: tuple[int, ...] | tuple[tuple[int, ...], str]
+    ) -> TensorSpec:
+        if isinstance(spec[0], int):
+            return TensorSpec(shape=cast(tuple[int, ...], spec), dtype="float32")
+        if isinstance(spec[0], tuple):
+            return TensorSpec(
+                shape=cast(tuple[int, ...], spec[0]), dtype=cast(str, spec[1])
+            )
+        raise NotImplementedError()
 
     # -----------------------------------------------------------------------
     # Tuple-like behavior for backwards compatibility with InputSpec usage

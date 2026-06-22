@@ -19,7 +19,10 @@ from qai_hub_models import TargetRuntime
 from qai_hub_models.protocols import ExecutableModelProtocol
 from qai_hub_models.utils.asset_loaders import ModelZooAssetConfig, VersionType
 from qai_hub_models.utils.export_result import CollectionExportResult
-from qai_hub_models.utils.input_spec import InputSpec
+from qai_hub_models.utils.input_spec import (
+    InputSpec,
+    workbench_to_qihm_input_spec,
+)
 from qai_hub_models.utils.qai_hub_helpers import (
     _AIHUB_NAME,
     make_hub_dataset_entries,
@@ -368,21 +371,21 @@ class AsyncOnDeviceModel:
                 "Unable to extract input shape from a model that was not compiled with AI Hub Workbench."
             )
         if producer._job_type == hub.JobType.QUANTIZE:
-            return cast(InputSpec, cast(hub.QuantizeJob, producer).shapes)
+            return workbench_to_qihm_input_spec(cast(hub.QuantizeJob, producer).shapes)
         if producer._job_type == hub.JobType.COMPILE:
-            out = cast(InputSpec, cast(hub.CompileJob, producer).target_shapes)
+            out = workbench_to_qihm_input_spec(
+                cast(hub.CompileJob, producer).target_shapes
+            )
             return transpose_channel_last_to_first_input_specs(
                 out, self.channel_last_input
             )
         if producer._job_type == hub.JobType.LINK:
-            out = cast(
-                InputSpec,
+            out = workbench_to_qihm_input_spec(
                 cast(
                     hub.CompileJob,
                     cast(hub.LinkJob, producer).models[0].get_producer(),
-                ).target_shapes,
+                ).target_shapes
             )
-
             return transpose_channel_last_to_first_input_specs(
                 out, self.channel_last_input
             )
