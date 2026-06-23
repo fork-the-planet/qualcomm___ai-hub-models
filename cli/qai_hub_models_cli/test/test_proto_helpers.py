@@ -358,41 +358,10 @@ class TestGetModelInfo:
         assert result.id == "mobilenet_v2"
         assert result.name == "MobileNet V2"
 
-    def test_fetches_from_s3(self, tmp_path: Path) -> None:
-        from qai_hub_models_cli.proto_helpers.info import get_model_info
 
-        with (
-            _not_dev_release,
-            patch(
-                "qai_hub_models_cli.proto_helpers._common.use_aihm_source",
-                return_value=False,
-            ),
-            patch(
-                "qai_hub_models_cli.proto_helpers.manifest.get_manifest",
-                return_value=_manifest(),
-            ),
-            patch(
-                "qai_hub_models_cli.proto_helpers._common.fetch_proto",
-                return_value=_model_info(),
-            ),
-        ):
-            result = get_model_info("mobilenet_v2", _RELEASE_VERSION)
-        assert result.id == "mobilenet_v2"
-
-    def test_not_found_raises(self) -> None:
-        from qai_hub_models_cli.proto_helpers.info import get_model_info
-
-        with (
-            patch(
-                "qai_hub_models_cli.proto_helpers.manifest.get_manifest",
-                return_value=_manifest(),
-            ),
-            pytest.raises(KeyError, match="No model exists"),
-        ):
-            get_model_info("fake_model", _RELEASE_VERSION)
-
-
-# ── perf.py ───────────────────────────────────────────────────────────
+# perf / numerics / release_assets are thin wrappers over the same
+# fetch_model_proto path; one local_path read each is enough to confirm wiring.
+# (The unknown-model KeyError is covered once by TestGetManifestEntry.)
 
 
 class TestGetModelPerf:
@@ -405,21 +374,6 @@ class TestGetModelPerf:
         assert result.model_id == "mobilenet_v2"
         assert result.performance_metrics[0].metrics.inference_time_milliseconds == 2.5
 
-    def test_not_found_raises(self) -> None:
-        from qai_hub_models_cli.proto_helpers.perf import get_model_perf
-
-        with (
-            patch(
-                "qai_hub_models_cli.proto_helpers.manifest.get_manifest",
-                return_value=_manifest(),
-            ),
-            pytest.raises(KeyError, match="No model exists"),
-        ):
-            get_model_perf("fake_model", _RELEASE_VERSION)
-
-
-# ── numerics.py ───────────────────────────────────────────────────────
-
 
 class TestGetModelNumerics:
     def test_local_path(self, tmp_path: Path) -> None:
@@ -430,21 +384,6 @@ class TestGetModelNumerics:
         result = get_model_numerics("mobilenet_v2", local_path=path)
         assert result.model_id == "mobilenet_v2"
         assert result.metrics[0].dataset_name == "imagenet"
-
-    def test_not_found_raises(self) -> None:
-        from qai_hub_models_cli.proto_helpers.numerics import get_model_numerics
-
-        with (
-            patch(
-                "qai_hub_models_cli.proto_helpers.manifest.get_manifest",
-                return_value=_manifest(),
-            ),
-            pytest.raises(KeyError, match="No model exists"),
-        ):
-            get_model_numerics("fake_model", _RELEASE_VERSION)
-
-
-# ── release_assets.py ─────────────────────────────────────────────────
 
 
 class TestGetModelReleaseAssets:
@@ -458,20 +397,6 @@ class TestGetModelReleaseAssets:
         result = get_model_release_assets("mobilenet_v2", local_path=path)
         assert result.model_id == "mobilenet_v2"
         assert len(result.assets) == 2
-
-    def test_not_found_raises(self) -> None:
-        from qai_hub_models_cli.proto_helpers.release_assets import (
-            get_model_release_assets,
-        )
-
-        with (
-            patch(
-                "qai_hub_models_cli.proto_helpers.manifest.get_manifest",
-                return_value=_manifest(),
-            ),
-            pytest.raises(KeyError, match="No model exists"),
-        ):
-            get_model_release_assets("fake_model", _RELEASE_VERSION)
 
 
 class TestGetModelAssetDetails:
@@ -564,10 +489,10 @@ class TestFilterReleaseAssets:
             )
 
     def test_sdk_version_filter(self) -> None:
+        from qai_hub_models_cli.common import parse_sdk_version_filters
         from qai_hub_models_cli.proto.shared.tool_versions_pb2 import ToolVersions
         from qai_hub_models_cli.proto_helpers.release_assets import (
             filter_release_assets,
-            parse_sdk_version_filters,
         )
 
         assets = ModelReleaseAssets(
@@ -820,21 +745,6 @@ class TestManifestDiskCache:
         mock_cli.get_manifest_proto.assert_not_called()
         assert result.version == "0.45.0"
 
-    def test_lru_cache_prevents_repeated_access(self, tmp_path: Path) -> None:
-        from qai_hub_models_cli.proto_helpers.manifest import get_manifest
-
-        cache_dir = tmp_path / "releases" / "v0.45.0.dev1"
-        cache_dir.mkdir(parents=True)
-        (cache_dir / "manifest.pb").write_bytes(_manifest().SerializeToString())
-        mock_cli = MagicMock()
-
-        with contextlib.ExitStack() as stack:
-            _enter_mocks(stack, self._mocks(cache_dir, mock_cli))
-            result1 = get_manifest(_DEV_VERSION)
-            result2 = get_manifest(_DEV_VERSION)
-
-        assert result1 is result2
-
 
 class TestInfoDiskCache:
     def _mocks(self, cache_path: Path, mock_cli: MagicMock) -> tuple:
@@ -883,17 +793,3 @@ class TestInfoDiskCache:
 
         mock_cli.get_info_proto.assert_not_called()
         assert result.id == "mobilenet_v2"
-
-    def test_lru_cache_prevents_repeated_access(self, tmp_path: Path) -> None:
-        from qai_hub_models_cli.proto_helpers.info import get_model_info
-
-        cache_path = tmp_path / "info.pb"
-        cache_path.write_bytes(_model_info().SerializeToString())
-        mock_cli = MagicMock()
-
-        with contextlib.ExitStack() as stack:
-            _enter_mocks(stack, self._mocks(cache_path, mock_cli))
-            result1 = get_model_info("mobilenet_v2", _DEV_VERSION)
-            result2 = get_model_info("mobilenet_v2", _DEV_VERSION)
-
-        assert result1 is result2

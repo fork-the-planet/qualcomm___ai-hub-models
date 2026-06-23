@@ -10,7 +10,18 @@ from pathlib import Path
 from packaging.version import Version
 
 from qai_hub_models_cli.proto.numerics_pb2 import ModelNumerics
+from qai_hub_models_cli.proto.platform_pb2 import PlatformInfo
+from qai_hub_models_cli.proto.shared.precision_pb2 import Precision
+from qai_hub_models_cli.proto.shared.runtime_pb2 import Runtime
 from qai_hub_models_cli.proto_helpers._common import fetch_model_proto
+from qai_hub_models_cli.proto_helpers.platform import device_names_for_filter
+from qai_hub_models_cli.proto_helpers.platform_enums import (
+    precision_proto_to_str,
+    precisions_str_to_proto_set,
+    runtime_proto_to_str,
+    runtimes_str_to_proto_set,
+)
+from qai_hub_models_cli.utils import build_table
 from qai_hub_models_cli.versions import CURRENT_VERSION
 
 
@@ -55,3 +66,120 @@ def get_model_numerics(
         source_getter="get_numerics_proto",
         local_path=local_path,
     )
+
+
+def filter_numerics(
+    numerics: ModelNumerics,
+    platform: PlatformInfo,
+    runtime: Runtime.ValueType | str | list[Runtime.ValueType | str] | None = None,
+    precision: Precision.ValueType
+    | str
+    | list[Precision.ValueType | str]
+    | None = None,
+    chipset: str | list[str] | None = None,
+    device: str | list[str] | None = None,
+) -> ModelNumerics:
+    """
+    Return a copy of *numerics* keeping only per-device results matching the filters.
+
+    The filters apply to each metric's per-device results; a metric is dropped
+    entirely if none of its device results match. Any filter left as ``None`` is
+    not applied. *chipset* and *device* are mutually exclusive: *device* matches
+    the named device(s), while *chipset* matches every device with the named
+    chipset(s).
+
+    Parameters
+    ----------
+    numerics
+        The model's numerics to filter.
+    platform
+        Platform registry used to resolve *runtime* display names and
+        *chipset*/*device*.
+    runtime
+        Runtime enum value or string to filter on (e.g. ``"tflite"``), or a list
+        of them; a result matches if its runtime is any of them.
+    precision
+        Precision enum value or string to filter on (e.g. ``"float"``), or a list
+        of them; a result matches if its precision is any of them.
+    chipset
+        Chipset reference (canonical ID, name, or alias) to filter on, or a list
+        of them. Mutually exclusive with *device*.
+    device
+        Device name to filter on, or a list of them. Mutually exclusive with
+        *chipset*.
+
+    Returns
+    -------
+    ModelNumerics
+        A new ``ModelNumerics`` keeping only matching per-device results.
+
+    Raises
+    ------
+    ValueError
+        If both *chipset* and *device* are provided.
+    KeyError
+        If *runtime*, *chipset*, or *device* is not known.
+    """
+    runtime_vals = runtimes_str_to_proto_set(runtime, platform)
+    precision_vals = precisions_str_to_proto_set(precision)
+    device_names = device_names_for_filter(platform, chipset, device)
+
+    filtered = ModelNumerics(
+        aihm_version=numerics.aihm_version,
+        model_id=numerics.model_id,
+    )
+    for metric in numerics.metrics:
+        matching = [
+            dm
+            for dm in metric.device_metrics
+            if (runtime_vals is None or dm.runtime in runtime_vals)
+            and (precision_vals is None or dm.precision in precision_vals)
+            and (device_names is None or dm.device.lower() in device_names)
+        ]
+        if not matching:
+            continue
+        new_metric = filtered.metrics.add()
+        new_metric.CopyFrom(metric)
+        del new_metric.device_metrics[:]
+        new_metric.device_metrics.extend(matching)
+    return filtered
+
+
+def format_numerics_table(
+    numerics: ModelNumerics,
+    title: str | None = "Numerics (Accuracy)",
+) -> str:
+    """Format a model's numerical accuracy metrics as a table.
+
+    One row per (metric, device result). The torch reference value for each
+    metric is shown alongside each on-device value for comparison.
+
+    Returns a message string when *numerics* has no per-device results.
+    """
+    columns = [
+        "Dataset",
+        "Metric",
+        "Precision",
+        "Runtime",
+        "Device",
+        "Accuracy",
+        "Torch Ref",
+    ]
+
+    rows = [
+        [
+            metric.dataset_name,
+            metric.metric_name,
+            precision_proto_to_str(dm.precision),
+            runtime_proto_to_str(dm.runtime),
+            dm.device,
+            f"{dm.partial_metric:.3g}{metric.metric_unit}",
+            f"{metric.partial_torch_metric:.3g}{metric.metric_unit}",
+        ]
+        for metric in numerics.metrics
+        for dm in metric.device_metrics
+    ]
+
+    if not rows:
+        return "No numerics match the given filters."
+    return build_table(columns, rows, wrap_column="Device", title=title)

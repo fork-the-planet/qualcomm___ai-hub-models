@@ -16,7 +16,11 @@ from qai_hub_models_cli._internal.utils import is_internal_repo, use_internal_re
 from qai_hub_models_cli._version import __version__
 from qai_hub_models_cli.common import (
     AIHUB_MODELS_URL,
+    build_filter_command,
+    format_command_sections,
     model_repo_url,
+    parse_sdk_version_filters,
+    sample_command,
 )
 from qai_hub_models_cli.envvars import (
     VERBOSE_EXCEPTIONS_ENVVAR,
@@ -30,6 +34,16 @@ from qai_hub_models_cli.proto.shared.precision_pb2 import Precision
 from qai_hub_models_cli.proto.shared.runtime_pb2 import Runtime
 from qai_hub_models_cli.proto_helpers.info import get_model_info
 from qai_hub_models_cli.proto_helpers.manifest import get_manifest, get_manifest_entry
+from qai_hub_models_cli.proto_helpers.numerics import (
+    filter_numerics,
+    format_numerics_table,
+    get_model_numerics,
+)
+from qai_hub_models_cli.proto_helpers.perf import (
+    filter_perf,
+    format_perf_table,
+    get_model_perf,
+)
 from qai_hub_models_cli.proto_helpers.platform import (
     filter_chipsets,
     filter_devices,
@@ -63,7 +77,6 @@ from qai_hub_models_cli.proto_helpers.release_assets import (
     format_tool_versions,
     get_model_asset_details,
     get_model_release_assets,
-    parse_sdk_version_filters,
 )
 from qai_hub_models_cli.utils import build_table, wrap_table_column
 from qai_hub_models_cli.versions import (
@@ -73,6 +86,7 @@ from qai_hub_models_cli.versions import (
     get_supported_versions,
     normalize_version,
     print_upgrade_notice,
+    version_flag,
 )
 
 T = TypeVar("T")
@@ -190,6 +204,7 @@ def _run_fetch(args: argparse.Namespace) -> None:
                 chipset=args.chipset,
                 device=args.device,
                 sdk_versions=sdk_versions,
+                version=args.qaihm_version,
             )
         )
         return
@@ -356,6 +371,201 @@ def add_fetch_parser(subparsers: argparse._SubParsersAction) -> argparse.Argumen
     return parser
 
 
+def _add_model_metric_filter_args(parser: argparse.ArgumentParser) -> None:
+    """Add the runtime/precision/chipset/device/sdk filters shared by the
+    ``perf`` and ``numerics`` commands. Mirrors the ``fetch`` filter flags.
+    """
+    runtime_values = ", ".join(
+        runtime_proto_to_str(r)
+        for r in Runtime.values()
+        if r != Runtime.RUNTIME_UNSPECIFIED
+    )
+    parser.add_argument(
+        "-r",
+        "--runtime",
+        nargs="+",
+        action="append",
+        default=None,
+        help="Filter by runtime(s); a record matches any of them. "
+        "May be repeated or given multiple values. "
+        f"Known values: {runtime_values}.",
+    )
+    precision_values = ", ".join(
+        precision_proto_to_str(p)
+        for p in Precision.values()
+        if p != Precision.PRECISION_UNSPECIFIED
+    )
+    parser.add_argument(
+        "-p",
+        "--precision",
+        nargs="+",
+        action="append",
+        default=None,
+        type=str.lower,
+        help="Filter by precision(s); a record matches any of them. "
+        "May be repeated or given multiple values. "
+        f"Known values: {precision_values}.",
+    )
+    target = parser.add_mutually_exclusive_group()
+    target.add_argument(
+        "-c",
+        "--chipset",
+        nargs="+",
+        action="append",
+        default=None,
+        type=str.lower,
+        help="Filter by chipset(s); a record matches any of them. "
+        "May be repeated or given multiple values. "
+        "Run `qai-hub-models chipsets` to see supported chipsets.",
+    )
+    target.add_argument(
+        "-d",
+        "--device",
+        nargs="+",
+        action="append",
+        default=None,
+        help="Filter by device(s); a record matches any of them. "
+        "May be repeated or given multiple values. "
+        "Run `qai-hub-models devices` to see supported devices. "
+        "Cannot be combined with --chipset.",
+    )
+
+
+def _print_model_metric_footer(command: str, args: argparse.Namespace) -> None:
+    """Print the related-command hints shown beneath a perf/numerics table.
+
+    Points at the listing commands for the dimensions a user can filter on, plus
+    an example ``command`` invocation pre-filled with the filters already passed
+    (placeholders for the rest).
+    """
+    vflag = version_flag(args.qaihm_version)
+    filter_cmd = build_filter_command(
+        command,
+        args.model,
+        vflag,
+        runtimes=_flatten_multi_arg(args.runtime),
+        precisions=_flatten_multi_arg(args.precision),
+        chipsets=_flatten_multi_arg(args.chipset),
+        devices=_flatten_multi_arg(args.device),
+    )
+    # The component and sdk-version filters are perf-only.
+    for comp in _flatten_multi_arg(getattr(args, "component", None)) or []:
+        filter_cmd += f" --component '{comp}'"
+    for query in getattr(args, "sdk_version", None) or []:
+        filter_cmd += f" -s '{query}'"
+
+    # Cross-link to the sibling metric command (perf <-> numerics).
+    sibling = "numerics" if command == "perf" else "perf"
+    sibling_label = (
+        "Accuracy metrics" if sibling == "numerics" else "Performance metrics"
+    )
+
+    print()
+    print(
+        format_command_sections(
+            {
+                "Platform Info": [
+                    ("More about runtimes", sample_command("runtimes", vflag)),
+                    ("Chipset information", sample_command("chipsets", vflag)),
+                    ("See devices per chipset", sample_command("devices", vflag)),
+                ],
+                "Model Info": [
+                    ("Full model details", sample_command("info", args.model, vflag)),
+                    (sibling_label, sample_command(sibling, args.model, vflag)),
+                    ("Filter these results", filter_cmd),
+                ],
+            }
+        )
+    )
+
+
+def _run_perf(args: argparse.Namespace) -> None:
+    sdk_versions = parse_sdk_version_filters(args.sdk_version or [])
+    perf = get_model_perf(args.model, args.qaihm_version)
+    perf = filter_perf(
+        perf,
+        get_platform(args.qaihm_version),
+        runtime=_flatten_multi_arg(args.runtime),
+        precision=_flatten_multi_arg(args.precision),
+        chipset=_flatten_multi_arg(args.chipset),
+        device=_flatten_multi_arg(args.device),
+        sdk_versions=sdk_versions,
+        components=_flatten_multi_arg(args.component),
+    )
+    print(format_perf_table(perf))
+    if perf.performance_metrics:
+        _print_model_metric_footer("perf", args)
+
+
+def add_perf_parser(subparsers: argparse._SubParsersAction) -> argparse.ArgumentParser:
+    parser = subparsers.add_parser(
+        "perf",
+        help="Show a model's performance metrics.",
+        description="Display per-device performance metrics (inference time, "
+        "memory, compute unit) for a model. The runtime, precision, chipset, "
+        "device, and sdk-version args act as filters.",
+    )
+    parser.add_argument(
+        "model", type=str.lower, help="Model ID or display name (e.g. mobilenet_v2)."
+    )
+    _add_model_metric_filter_args(parser)
+    parser.add_argument(
+        "-s",
+        "--sdk-version",
+        nargs="+",
+        default=None,
+        type=str.lower,
+        help="Filter by SDK/tool version using 'tool=version' syntax (e.g. "
+        "'litert=1.4.4' or 'qairt=2.20'). Accepts multiple values; a record "
+        "must match all of them.",
+    )
+    parser.add_argument(
+        "--component",
+        nargs="+",
+        action="append",
+        default=None,
+        help="Filter to the given component(s), for multi-component models. "
+        "May be repeated or given multiple values.",
+    )
+    _add_version_arg(parser)
+    parser.set_defaults(func=_run_perf)
+    return parser
+
+
+def _run_numerics(args: argparse.Namespace) -> None:
+    numerics = get_model_numerics(args.model, args.qaihm_version)
+    numerics = filter_numerics(
+        numerics,
+        get_platform(args.qaihm_version),
+        runtime=_flatten_multi_arg(args.runtime),
+        precision=_flatten_multi_arg(args.precision),
+        chipset=_flatten_multi_arg(args.chipset),
+        device=_flatten_multi_arg(args.device),
+    )
+    print(format_numerics_table(numerics))
+    if numerics.metrics:
+        _print_model_metric_footer("numerics", args)
+
+
+def add_numerics_parser(
+    subparsers: argparse._SubParsersAction,
+) -> argparse.ArgumentParser:
+    parser = subparsers.add_parser(
+        "numerics",
+        help="Show a model's accuracy metrics.",
+        description="Display per-device numerical accuracy metrics for a model, "
+        "alongside the torch reference value. The runtime, precision, chipset, "
+        "and device args act as filters.",
+    )
+    parser.add_argument(
+        "model", type=str.lower, help="Model ID or display name (e.g. mobilenet_v2)."
+    )
+    _add_model_metric_filter_args(parser)
+    _add_version_arg(parser)
+    parser.set_defaults(func=_run_numerics)
+    return parser
+
+
 def _run_list_models(args: argparse.Namespace) -> None:
     manifest = get_manifest(args.qaihm_version)
 
@@ -496,9 +706,12 @@ def _run_list_models(args: argparse.Namespace) -> None:
         " - Request we add a new model: https://github.com/qualcomm/ai-hub-models/issues\n"
     )
     print(
-        "More about our supported platforms: `qai_hub_models runtimes`, `qai_hub_models devices`, `qai_hub_models chipsets`\n"
+        f"More about our supported platforms: `{sample_command('runtimes')}`, "
+        f"`{sample_command('devices')}`, `{sample_command('chipsets')}`\n"
     )
-    print("Run `qai_hub_models info <model_id>` for details and download options.")
+    print(
+        f"Run `{sample_command('info', '<model_id>')}` for details and download options."
+    )
     print_upgrade_notice()
 
 
@@ -891,7 +1104,14 @@ def _run_info(args: argparse.Namespace) -> None:
             )
         )
         print()
-        print(format_fetch_commands(release_assets, args.model))
+        print(
+            format_fetch_commands(
+                release_assets,
+                args.model,
+                include_metrics=True,
+                version=args.qaihm_version,
+            )
+        )
         print()
         print(
             f"Most models can be further customized beyond what is offered by standard model downloads. Scripts that can export the model from source are available at {model_repo_url(info.id, args.qaihm_version)}"
@@ -992,6 +1212,8 @@ def main(args: list[str] | None = None) -> None:
 
     add_fetch_parser(subparsers)
     add_info_parser(subparsers)
+    add_perf_parser(subparsers)
+    add_numerics_parser(subparsers)
     add_list_models_parser(subparsers)
     add_list_devices_parser(subparsers)
     add_list_chipsets_parser(subparsers)

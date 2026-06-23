@@ -5,7 +5,7 @@
 from __future__ import annotations
 
 import functools
-import os
+import posixpath
 from pathlib import Path
 
 from packaging.version import Version
@@ -71,7 +71,7 @@ def get_manifest(
     else:
         url_prefix = STORE_URL
 
-    url = os.path.join(
+    url = posixpath.join(
         url_prefix, "qai-hub-models", "releases", f"v{version}", "manifest.pb"
     )
     return fetch_release_proto(

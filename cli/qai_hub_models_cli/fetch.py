@@ -14,6 +14,7 @@ from qai_hub_models_cli.common import (
     AIHUB_MODELS_URL,
     ASSET_FOLDER,
     STORE_URL,
+    sample_command,
 )
 from qai_hub_models_cli.proto.shared.precision_pb2 import Precision
 from qai_hub_models_cli.proto.shared.runtime_pb2 import Runtime
@@ -34,6 +35,7 @@ from qai_hub_models_cli.versions import (
     CURRENT_VERSION,
     MIN_MANIFEST_VERSION,
     UnsupportedVersionError,
+    version_flag,
 )
 
 ASSET_FILENAME = "{model_id}-{runtime}-{precision}.zip"
@@ -150,7 +152,10 @@ def get_asset_url(
         If the asset does not exist on the server.
     """
     # Hint shown on every failure: how to list all available assets.
-    show_all = f"Run `qai_hub_models fetch {model} -i` to see all available assets."
+    show_all = (
+        f"Run `{sample_command('fetch', model, version_flag(version), '-i')}` "
+        "to see all available assets."
+    )
 
     if chipset is not None and device is not None:
         raise ValueError("Provide at most one of 'chipset' or 'device'.")
@@ -214,6 +219,7 @@ def get_asset_url(
             device=device,
             sdk_versions=sdk_versions,
             url_only=url_only,
+            version=version,
         )
         raise AssetNotFoundError(
             f"{reason}\n\nAssets that match your current selection(s):\n{table}"

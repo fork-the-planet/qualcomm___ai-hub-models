@@ -10,7 +10,12 @@ from pathlib import Path
 
 from packaging.version import Version
 
-from qai_hub_models_cli.common import model_repo_url
+from qai_hub_models_cli.common import (
+    build_filter_command,
+    format_command_sections,
+    model_repo_url,
+    sample_command,
+)
 from qai_hub_models_cli.proto import info_pb2
 from qai_hub_models_cli.proto.platform_pb2 import ChipsetInfo, PlatformInfo
 from qai_hub_models_cli.proto.release_assets_pb2 import ModelReleaseAssets
@@ -26,12 +31,13 @@ from qai_hub_models_cli.proto_helpers.platform import (
 )
 from qai_hub_models_cli.proto_helpers.platform_enums import (
     precision_proto_to_str,
-    precision_str_to_proto,
+    precisions_str_to_proto_set,
     runtime_proto_to_str,
     runtime_str_to_proto,
+    runtimes_str_to_proto_set,
 )
 from qai_hub_models_cli.utils import build_table
-from qai_hub_models_cli.versions import CURRENT_VERSION
+from qai_hub_models_cli.versions import CURRENT_VERSION, version_flag
 
 
 class AssetNotFoundError(FileNotFoundError):
@@ -67,41 +73,6 @@ _SDK_FILTER_TOOLS: dict[str, str] = {
     **{field: field for field, _ in _TOOL_VERSION_LABELS},
     **{label.lower(): field for field, label in _TOOL_VERSION_LABELS},
 }
-
-
-def parse_sdk_version_filters(queries: list[str]) -> dict[str, str]:
-    """Parse ``tool=version`` filter strings into a ``{tool: version}`` map.
-
-    Each query uses ``tool=version`` syntax (e.g. ``"litert=1.4.4"``). Only the
-    syntax is validated here; the tool name is normalized but resolved to a proto
-    field later, in :func:`tool_versions_match`.
-
-    Parameters
-    ----------
-    queries
-        SDK version filter strings.
-
-    Returns
-    -------
-    dict[str, str]
-        Map of (normalized) tool name to (lower-cased) version substring.
-
-    Raises
-    ------
-    ValueError
-        If any query is not of the form ``tool=version``.
-    """
-    parsed: dict[str, str] = {}
-    for query in queries:
-        if "=" not in query:
-            raise ValueError(
-                f"Invalid SDK version filter {query!r}. "
-                "Use 'tool=version' syntax, e.g. 'litert=1.4.4'."
-            )
-        tool, _, version = query.partition("=")
-        tool = tool.strip().lower().replace("-", "_").replace(" ", "_")
-        parsed[tool] = version.strip().lower()
-    return parsed
 
 
 def tool_versions_match(
@@ -290,56 +261,76 @@ def format_fetch_commands(
     device: str | None = None,
     sdk_versions: dict[str, str] | None = None,
     url_only: bool = False,
+    include_metrics: bool = False,
+    version: Version = CURRENT_VERSION,
 ) -> str:
     """Format the ``fetch``/``devices`` command hints shown beneath a table.
 
     ``sdk_versions`` (a ``tool -> version`` map) is echoed into the suggested
-    command as ``-s tool=version`` flags.
+    command as ``-s tool=version`` flags. When *include_metrics* is True,
+    pointers to the ``perf`` and ``numerics`` commands are appended. When
+    *version* is not the installed version, every suggested command carries
+    ``-v <version>`` so it stays pinned to the release being browsed.
     """
     has_chipset_assets = any(
         asset.HasField("chipset") for asset in release_assets.assets
     )
-    # Pre-fill the download command with the user's known values, falling back
-    # to placeholders for anything they haven't specified. Known values are
-    # quoted since runtime display names (and chipset/device names) can contain
-    # spaces; placeholders are left unquoted.
-    runtime_arg = f"'{runtime}'" if runtime else "<runtime>"
-    precision_arg = f"'{precision}'" if precision else "<precision>"
-    download_cmd = f"qai_hub_models fetch {model} -r {runtime_arg} -p {precision_arg}"
-    if device is not None:
-        download_cmd += f" -d '{device}'"
-    elif chipset is not None:
-        download_cmd += f" -c '{chipset}'"
-    elif has_chipset_assets:
-        download_cmd += " [ -c '<chipset>' || -d '<device>' ]"
+    vflag = version_flag(version)
+    download_cmd = build_filter_command(
+        "fetch",
+        model,
+        vflag,
+        runtimes=[runtime] if runtime else None,
+        precisions=[precision] if precision else None,
+        chipsets=[chipset] if chipset else None,
+        devices=[device] if device else None,
+        show_chipset_placeholder=has_chipset_assets,
+    )
     for tool, ver in (sdk_versions or {}).items():
         download_cmd += f" -s '{tool}={ver}'"
     if url_only:
         download_cmd += " --url-only"
 
-    entries = []
-    if subset:
-        entries.append(("See all assets", f"qai_hub_models fetch {model} -i"))
-    entries.append(("More about runtimes", "qai_hub_models runtimes"))
+    platform_entries = [("More about runtimes", sample_command("runtimes", vflag))]
     if has_chipset_assets:
-        entries.append(("Chipset information", "qai_hub_models chipsets"))
-        entries.append(("See devices per chipset", "qai_hub_models devices"))
-    entries.append(
+        platform_entries.append(
+            ("Chipset information", sample_command("chipsets", vflag))
+        )
+        platform_entries.append(
+            ("See devices per chipset", sample_command("devices", vflag))
+        )
+
+    model_entries = []
+    if subset:
+        model_entries.append(
+            ("See all assets", sample_command("fetch", model, vflag, "-i"))
+        )
+    if include_metrics:
+        model_entries.append(
+            ("Performance metrics", sample_command("perf", model, vflag))
+        )
+        model_entries.append(
+            ("Accuracy metrics", sample_command("numerics", model, vflag))
+        )
+    model_entries.append(
         ("Get an asset URL" if url_only else "Download an asset", download_cmd)
     )
-    label_width = max(len(label) for label, _ in entries)
-    return "\n".join(
-        f"  {label + ':':<{label_width + 1}}  {cmd}" for label, cmd in entries
+
+    return format_command_sections(
+        {"Platform": platform_entries, "Model": model_entries}
     )
 
 
 def filter_release_assets(
     release_assets: ModelReleaseAssets,
     platform: PlatformInfo,
-    runtime: Runtime.ValueType | str | None = None,
-    precision: Precision.ValueType | str | None = None,
-    chipset: str | None = None,
-    device: str | None = None,
+    runtime: Runtime.ValueType | str | list[Runtime.ValueType | str] | None = None,
+    precision: Precision.ValueType
+    | str
+    | list[Precision.ValueType | str]
+    | None = None,
+    chipset: str | list[str] | None = None,
+    device: str | list[str] | None = None,
     sdk_versions: dict[str, str] | None = None,
 ) -> ModelReleaseAssets:
     """
@@ -357,14 +348,17 @@ def filter_release_assets(
     platform
         Platform registry used to resolve *chipset*/*device*.
     runtime
-        Runtime enum value or string to filter on (e.g. ``"tflite"``).
+        Runtime enum value or string to filter on (e.g. ``"tflite"``), or a list
+        of them; an asset matches if its runtime is any of them.
     precision
-        Precision enum value or string to filter on (e.g. ``"float"``).
+        Precision enum value or string to filter on (e.g. ``"float"``), or a list
+        of them; an asset matches if its precision is any of them.
     chipset
-        Chipset reference (canonical ID, name, or alias) to filter on.
+        Chipset reference (canonical ID, name, or alias) to filter on, or a list
+        of them. Mutually exclusive with *device*.
     device
-        Device name to filter on; resolved to its chipset. Mutually exclusive
-        with *chipset*.
+        Device name to filter on, or a list of them; resolved to its chipset.
+        Mutually exclusive with *chipset*.
     sdk_versions
         Map of tool proto field to version substring (see
         :func:`parse_sdk_version_filters`), e.g.
@@ -388,29 +382,31 @@ def filter_release_assets(
     if chipset is not None and device is not None:
         raise ValueError("Provide at most one of 'chipset' or 'device'.")
 
-    runtime_val = (
-        runtime_str_to_proto(runtime, platform) if runtime is not None else None
-    )
-    precision_val = precision_str_to_proto(precision) if precision is not None else None
-    chipset_name: str | None = None
-    if chipset is not None or device is not None:
-        chipset_name = resolve_chipset(platform, device=device, chipset=chipset).name
+    runtime_vals = runtimes_str_to_proto_set(runtime, platform)
+    precision_vals = precisions_str_to_proto_set(precision)
+    chipset_names: set[str] | None = None
+    if chipset is not None:
+        refs = [chipset] if isinstance(chipset, str) else chipset
+        chipset_names = {resolve_chipset(platform, chipset=c).name for c in refs}
+    elif device is not None:
+        refs = [device] if isinstance(device, str) else device
+        chipset_names = {resolve_chipset(platform, device=d).name for d in refs}
 
     filtered = ModelReleaseAssets(
         aihm_version=release_assets.aihm_version,
         model_id=release_assets.model_id,
     )
     for asset in release_assets.assets:
-        if runtime_val is not None and asset.runtime != runtime_val:
+        if runtime_vals is not None and asset.runtime not in runtime_vals:
             continue
-        if precision_val is not None and asset.precision != precision_val:
+        if precision_vals is not None and asset.precision not in precision_vals:
             continue
         # Universal assets (no chipset) run on any chipset, so keep them when
         # filtering by chipset/device.
         if (
-            chipset_name is not None
+            chipset_names is not None
             and asset.HasField("chipset")
-            and asset.chipset != chipset_name
+            and asset.chipset not in chipset_names
         ):
             continue
         if sdk_versions and not (

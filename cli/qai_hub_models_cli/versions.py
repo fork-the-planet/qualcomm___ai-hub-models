@@ -138,6 +138,16 @@ def normalize_version(version: str) -> str:
     return version.lower().removeprefix("v")
 
 
+def version_flag(version: Version) -> str:
+    """Return ``"-v <version>"`` for a non-current release, else ``""``.
+
+    Sample commands shown to the user must carry ``-v`` when browsing a release
+    other than the installed one, or following them would silently retarget the
+    installed version. Pass the result as ``format_command_sections``'s version_suffix.
+    """
+    return f"-v {version}" if version != CURRENT_VERSION else ""
+
+
 def verify_not_dev_release(version: Version) -> None:
     """Raise if *version* is a dev release (e.g. ``0.45.0.dev1``)."""
     if version.is_devrelease:

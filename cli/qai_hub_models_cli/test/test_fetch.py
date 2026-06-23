@@ -275,7 +275,8 @@ def test_get_asset_url_no_match(mock_assets: MagicMock) -> None:
         )
     msg = str(exc.value)
     assert "No asset found" in msg
-    assert "fetch mobilenet_v2 -i" in msg
+    # The list-all hint carries the browsed version so it stays pinned.
+    assert "fetch mobilenet_v2 -v 0.52.0 -i" in msg
     assert "Precision" not in msg  # no table
 
 

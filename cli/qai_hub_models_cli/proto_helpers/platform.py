@@ -204,6 +204,37 @@ def resolve_chipset(
     )
 
 
+def device_names_for_filter(
+    platform: PlatformInfo,
+    chipset: str | list[str] | None,
+    device: str | list[str] | None,
+) -> set[str] | None:
+    """Expand a ``--chipset``/``--device`` filter into the device names it matches.
+
+    Pass one of *chipset* or *device* (each a name or list of names); the other
+    must be ``None``. Returns lowercased device names to match records against:
+
+    - ``device``: the named device(s) themselves.
+    - ``chipset``: every device that runs on the named chipset(s).
+    - neither: ``None``, meaning "no device filter".
+
+    Every name is validated against *platform*; an unknown one raises ``KeyError``
+    pointing at the ``devices``/``chipsets`` commands.
+    """
+    if chipset is not None and device is not None:
+        raise ValueError("Provide at most one of 'chipset' or 'device'.")
+    if device is not None:
+        names = [device] if isinstance(device, str) else device
+        for name in names:
+            resolve_chipset(platform, device=name)  # validate; raises if unknown
+        return {name.lower() for name in names}
+    if chipset is not None:
+        refs = [chipset] if isinstance(chipset, str) else chipset
+        chipset_ids = {resolve_chipset(platform, chipset=ref).name for ref in refs}
+        return {d.name.lower() for d in platform.devices if d.chipset in chipset_ids}
+    return None
+
+
 def filter_devices(
     devices: Iterable[DeviceInfo],
     chipsets: Iterable[ChipsetInfo],

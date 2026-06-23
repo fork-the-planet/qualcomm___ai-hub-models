@@ -4,8 +4,16 @@
 # ---------------------------------------------------------------------
 from qai_hub_models_cli.proto_helpers.info import get_model_info
 from qai_hub_models_cli.proto_helpers.manifest import get_manifest, get_manifest_entry
-from qai_hub_models_cli.proto_helpers.numerics import get_model_numerics
-from qai_hub_models_cli.proto_helpers.perf import get_model_perf
+from qai_hub_models_cli.proto_helpers.numerics import (
+    filter_numerics,
+    format_numerics_table,
+    get_model_numerics,
+)
+from qai_hub_models_cli.proto_helpers.perf import (
+    filter_perf,
+    format_perf_table,
+    get_model_perf,
+)
 from qai_hub_models_cli.proto_helpers.platform import (
     get_platform,
     resolve_runtime,
@@ -22,6 +30,10 @@ from qai_hub_models_cli.proto_helpers.release_assets import (
 )
 
 __all__ = [
+    "filter_numerics",
+    "filter_perf",
+    "format_numerics_table",
+    "format_perf_table",
     "get_manifest",
     "get_manifest_entry",
     "get_model_asset_details",

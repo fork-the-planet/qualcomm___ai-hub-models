@@ -142,6 +142,57 @@ def runtime_proto_to_str(
     return name.removeprefix("RUNTIME_").lower()
 
 
+def runtimes_str_to_proto_set(
+    runtimes: str | Runtime.ValueType | list[str | Runtime.ValueType] | None,
+    platform: PlatformInfo | None = None,
+) -> set[Runtime.ValueType] | None:
+    """
+    Resolve a single runtime or a list of runtimes to a set of enum values.
+
+    Parameters
+    ----------
+    runtimes
+        A single runtime or a list of them. See :func:`runtime_str_to_proto`
+        for accepted value forms. ``None`` means no filter.
+    platform
+        Optional platform registry supplying runtime display names.
+
+    Returns
+    -------
+    set[Runtime.ValueType] | None
+        The resolved enum values, or ``None`` when *runtimes* is ``None``.
+    """
+    if runtimes is None:
+        return None
+    if isinstance(runtimes, (str, int)):
+        runtimes = [runtimes]
+    return {runtime_str_to_proto(r, platform) for r in runtimes}
+
+
+def precisions_str_to_proto_set(
+    precisions: str | Precision.ValueType | list[str | Precision.ValueType] | None,
+) -> set[Precision.ValueType] | None:
+    """
+    Resolve a single precision or a list of precisions to a set of enum values.
+
+    Parameters
+    ----------
+    precisions
+        A single precision or a list of them. See :func:`precision_str_to_proto`
+        for accepted value forms. ``None`` means no filter.
+
+    Returns
+    -------
+    set[Precision.ValueType] | None
+        The resolved enum values, or ``None`` when *precisions* is ``None``.
+    """
+    if precisions is None:
+        return None
+    if isinstance(precisions, (str, int)):
+        precisions = [precisions]
+    return {precision_str_to_proto(p) for p in precisions}
+
+
 def runtime_str_to_proto(
     runtime: str | Runtime.ValueType,
     platform: PlatformInfo | None = None,
