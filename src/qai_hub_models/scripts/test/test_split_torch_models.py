@@ -10,9 +10,11 @@ import pytest
 import ruamel.yaml
 
 from qai_hub_models.scorecard.artifacts import RUNTIME_STAGE_JOB_SUBMISSION
+from qai_hub_models.scorecard.envvars import SpecialModelSetting
 from qai_hub_models.scripts.split_torch_models import (
     _balance_lpt,
     _split_aot_jit,
+    split_torch_models,
 )
 
 
@@ -195,6 +197,24 @@ def test_load_runtime_estimates_reads_models_section(tmp_path: Path) -> None:
         "model_a": {"job_submission": 100.0, "accuracy": 50.0},
         "model_b": {"job_submission": 200.0},
     }
+
+
+def test_collapse_to_single_split_emits_one_torch_split() -> None:
+    """Unit-only runs collapse all torch models (incl. LLM/PI0_5) into one split
+    on the default runner -- no GPU custom splits.
+    """
+    splits = split_torch_models(
+        {SpecialModelSetting.PYTORCH}, collapse_to_single_split=True
+    )
+    torch_splits = [s for s in splits if s["split_name"] != "static"]
+    assert len(torch_splits) == 1
+    assert torch_splits[0]["split_name"] == "torch"
+    assert torch_splits[0]["runs_on"] is None
+    # LLM models would normally land in their own GPU split; verify they're
+    # folded into the single torch split here.
+    models_str = torch_splits[0]["models"]
+    assert isinstance(models_str, str)
+    assert any(m.startswith("llama_v3") for m in models_str.split(","))
 
 
 @pytest.mark.parametrize("num_splits", [1, 2, 4, 8])

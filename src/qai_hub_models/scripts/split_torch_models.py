@@ -149,6 +149,7 @@ def split_torch_models(
     max_pt_models_per_split: int = MAX_PT_MODELS_PER_SPLIT,
     stage: str | None = None,
     runtime_estimates_path: Path | None = None,
+    collapse_to_single_split: bool = False,
 ) -> list[dict[str, str | RunsOnValue]]:
     """
     Split models into chunks for parallel processing.
@@ -173,6 +174,10 @@ def split_torch_models(
         when no runtime data is available.
     runtime_estimates_path
         Override for the runtime estimates YAML (default: checked-in copy).
+    collapse_to_single_split
+        If True, emit a single torch split with all models on the default
+        runner -- no custom GPU splits, no chunking. Use for unit-only runs
+        where splitting buys nothing.
 
     Returns
     -------
@@ -182,6 +187,25 @@ def split_torch_models(
     torch_models, static_models = validate_and_split_enabled_models(models)
 
     splits: list[dict[str, str | RunsOnValue]] = []
+
+    if collapse_to_single_split:
+        if static_models:
+            splits.append(
+                {
+                    "split_name": "static",
+                    "models": ",".join(sorted(static_models)),
+                    "runs_on": None,
+                }
+            )
+        if torch_models:
+            splits.append(
+                {
+                    "split_name": "torch",
+                    "models": ",".join(sorted(torch_models)),
+                    "runs_on": None,
+                }
+            )
+        return splits
 
     # Add all static models as one split
     if static_models:
@@ -297,6 +321,14 @@ def main() -> None:
         default="json",
         help="Output format: 'json' for pretty JSON, 'github' for GitHub Actions matrix format",
     )
+    parser.add_argument(
+        "--collapse-to-single-split",
+        action="store_true",
+        help=(
+            "Emit a single torch split with all models on the default runner. "
+            "Use for unit-only runs where splitting buys nothing."
+        ),
+    )
 
     args = parser.parse_args()
     splits = split_torch_models(
@@ -305,6 +337,7 @@ def main() -> None:
         args.max_models_per_pt_split,
         stage=args.stage,
         runtime_estimates_path=args.runtime_estimates_path,
+        collapse_to_single_split=args.collapse_to_single_split,
     )
     if args.output_format == "github":
         # Output as a single line JSON for GitHub Actions
