@@ -164,7 +164,7 @@ def get_performance_table_rows(
         }
 
         if profile_perf_details.llm_metrics is not None:
-            # LLM metrics - create a row for each context length
+            # LLM metrics - one row per (context_length, desired_compute_unit).
             is_llm = True
             for ctx in profile_perf_details.llm_metrics:
                 assert ctx.tokens_per_second
@@ -174,6 +174,7 @@ def get_performance_table_rows(
                 row["context_length"] = ctx.context_length
                 row["tokens_per_second"] = str(ctx.tokens_per_second)
                 row["time_to_first_token"] = f"{ttft.min / 1000} - {ttft.max / 1000}"
+                row["compute_unit"] = ctx.desired_compute_unit
                 rows.append(row)
         else:
             assert profile_perf_details.estimated_peak_memory_range_mb

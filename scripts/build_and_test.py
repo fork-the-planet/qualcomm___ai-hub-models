@@ -53,6 +53,7 @@ from tasks.task import (
 from tasks.test import (
     CollectLLMPerfTask,
     GenerateTestSummaryTask,
+    GenieXBenchTask,
     GPUPyTestModelsTask,
     GradeLLMResponsesTask,
     InstallGlobalRequirementsTask,
@@ -386,6 +387,23 @@ class TaskLibrary:
         return plan.add_step(
             step_id,
             CollectLLMPerfTask(venv=self.venv_path),
+        )
+
+    @public_task("Run geniex-bench (llama_cpp GGUF + qairt) benchmarks on QDC devices")
+    @depends(["install_deps"])
+    def run_geniex_bench(self, plan: Plan, step_id: str = "run_geniex_bench") -> str:
+        """
+        Run geniex-bench benchmarks on QDC devices.
+
+        Configuration is passed via environment variables:
+        - QAIHM_MODELS: Comma-separated model names, or "all"
+        - QAIHM_TEST_DEVICES: Comma-separated cs_* names
+        - GENIEX_BENCH_PLUGIN: qairt | llama_cpp | all
+        - QDC_API_TOKEN: QDC API token
+        """
+        return plan.add_step(
+            step_id,
+            GenieXBenchTask(venv=self.venv_path),
         )
 
     @public_task("Model Test Setup")

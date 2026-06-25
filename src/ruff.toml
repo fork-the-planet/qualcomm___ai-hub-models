@@ -10,6 +10,7 @@ extend = "../ruff.toml"
 "{src/,}qai_hub_models/models/_shared/lm_driver/*" = ["ALL"]  # cloned from GenAILab, not our code
 "{src/,}qai_hub_models/__init__.py" = ["TID251"]  # re-exports from qai_hub_models.common
 "{src/,}qai_hub_models/models/common.py" = ["TID251"]  # deprecated shim that mirrors qai_hub_models.common
+"**/qdc/device_scripts/geniex_pytest/*" = ["INP", "SIM117", "SIM905"]  # device-side templates packed into the QDC artifact zip; placeholders like "{CTX_LIST}" are runtime-substituted, not literals
 
 [lint.flake8-tidy-imports.banned-api]
 "numba".msg = "Do not directly import from numba, as it is an optional dependency. Safely import from qai_hub_models.extern.numba instead."

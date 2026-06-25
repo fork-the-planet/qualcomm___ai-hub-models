@@ -1,12 +1,8 @@
-##
-## QAI Hub Models LL Performance Collection (Geniex)
-##
-## Placeholder workflow for dispatch testing. Real perf-collection logic will be added later,
-## modeled on llm_perf_collection.yml.
-##
+## Collects TPS/TTFT via geniex-bench (llama_cpp + qairt plugins) on QDC,
+## then opens one PR replaying perf.yaml updates from a JSON manifest.
 
-name: LL Performance Collection (Geniex)
-run-name: "LLM Perf Geniex (${{ inputs.model || 'all' }}, ${{ inputs.device || 'all' }})"
+name: GenieX Performance Collection
+run-name: "GenieX Perf (${{ inputs.model || 'all' }}, ${{ inputs.device || 'all' }})"
 
 env:
   VENV_PATH: build/ci-envs/qaihm-build
@@ -23,21 +19,19 @@ on:
         type: string
 
       device:
-        description: 'Target device(s). See `src/qai_hub_models/scorecard/device.py`. Comma-separated scorecard device names, or "all" for all LLM compile devices.'
+        description: 'Target device(s). See `src/qai_hub_models/scorecard/device.py`. Comma-separated scorecard device names (e.g. "cs_x2_elite,cs_auto_lemans_8775"), or "all" for all LLM compile devices.'
         required: true
         default: 'all'
         type: string
 
-      precision:
-        description: 'Precision(s) to collect perf for. Comma-separated (e.g. "w4,w4a16"), "all" for every supported precision, or "default" to use the model''s default_precisions.'
-        required: true
-        default: 'default'
-        type: string
-
-      run_eval:
-        description: 'Run on-device evaluation with default prompts.'
-        default: true
-        type: boolean
+      geniex_bench_plugin:
+        description: 'geniex-bench plugin(s) to run.'
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - llama_cpp
+          - qairt
 
       create_pr:
         description: 'Create PR with perf.yaml changes'
@@ -52,38 +46,200 @@ on:
         default: 'all'
 
       device:
-        description: 'Target device(s). Comma-separated scorecard device names, or "all" for all LLM compile devices.'
+        description: 'Target device(s). See `src/qai_hub_models/scorecard/device.py`. Comma-separated scorecard device names, or "all" for all LLM compile devices.'
         type: string
         default: 'all'
 
-      precision:
-        description: 'Precision(s) to collect perf for. Comma-separated, "all", or "default".'
+      geniex_bench_plugin:
+        description: 'geniex-bench plugin(s) to run.'
         type: string
-        default: 'default'
-
-      run_eval:
-        description: 'Run on-device evaluation'
-        type: boolean
-        default: true
+        default: 'all'
 
       create_pr:
         description: 'Create PR with perf.yaml changes'
         type: boolean
         default: true
 
+
 defaults:
   run:
     shell: bash
 
 jobs:
-  placeholder:
-    name: "Placeholder (no-op)"
-    runs-on: ubuntu-latest
+  collect_geniex_bench_perf:
+    name: "Collect GenieX-bench Performance Numbers"
+    runs-on: [tetra-ubuntu-2204, self-hosted]
+    timeout-minutes: 7200
+    permissions:
+      contents: read
+      actions: read
+      id-token: write
+      packages: read
+    env:
+      QDC_API_TOKEN: ${{ secrets.QDC_API_KEY }}
+
     steps:
-    - name: Report dispatch
+    - uses: actions/checkout@v6
+      with:
+        fetch-depth: 0
+
+    - name: CI Setup
+      uses: ./.github/actions/ci-setup
+      with:
+        python-version: USE_EXISTING_INSTALL
+        venv-path: ${{ env.VENV_PATH }}
+        aws-role-arn: ${{ secrets.QAIHM_CI_AWS_ROLE_ARN }}
+
+    - name: Install qai_hub_models from source
       run: |
-        echo "LL Performance Collection (Geniex) dispatched."
-        echo "model=${{ inputs.model || 'all' }}"
-        echo "device=${{ inputs.device || 'all' }}"
-        echo "precision=${{ inputs.precision || 'default' }}"
-        echo "This is an empty placeholder workflow. No work performed."
+        source ${{ env.VENV_PATH }}/bin/activate
+        pip install -e src/
+
+    - name: Download QDC wheel and install
+      run: |
+        python3 scripts/build_and_test.py \
+          --venv="${{ env.VENV_PATH }}" \
+          --python="$(which python3)" \
+          download_qdc_wheel --only
+        source ${{ env.VENV_PATH }}/bin/activate
+        pip install qualcomm_device_cloud_sdk-*.whl
+
+    - name: Run geniex-bench Benchmarks
+      id: run_benchmarks
+      continue-on-error: true
+      env:
+        QAIHM_MODELS: ${{ inputs.model || 'all' }}
+        QAIHM_TEST_DEVICES: ${{ inputs.device || 'cs_x2_elite,cs_x_elite' }}
+        GENIEX_BENCH_PLUGIN: ${{ inputs.geniex_bench_plugin || 'all' }}
+      run: |
+        source ${{ env.VENV_PATH }}/bin/activate
+        cd $GITHUB_WORKSPACE
+        python -m qai_hub_models.scripts.run_geniex_bench_benchmarks \
+          --models "$QAIHM_MODELS" \
+          --devices "$QAIHM_TEST_DEVICES" \
+          --plugin "$GENIEX_BENCH_PLUGIN"
+
+    - name: Upload geniex-bench results
+      if: ${{ !cancelled() }}
+      uses: actions/upload-artifact@v7
+      with:
+        name: geniex-bench-results
+        path: |
+          ${{ github.workspace }}/geniex_bench_results.csv
+          ${{ github.workspace }}/geniex_bench_results/**/*.json
+
+    - name: Upload geniex perf.yaml update manifest
+      if: ${{ !cancelled() }}
+      uses: actions/upload-artifact@v7
+      with:
+        name: geniex-perf-updates
+        path: ${{ github.workspace }}/geniex_perf_updates.json
+        if-no-files-found: ignore
+
+    - name: Fail workflow if benchmarks failed
+      if: ${{ !cancelled() && steps.run_benchmarks.outcome == 'failure' }}
+      run: exit 1
+
+  create_perf_pr:
+    name: "Open GenieX Perf PR"
+    needs: [collect_geniex_bench_perf]
+    if: ${{ !cancelled() && inputs.create_pr }}
+    runs-on: [tetra-ubuntu-2204, self-hosted]
+    permissions:
+      contents: write
+      pull-requests: write
+    outputs:
+      branch_name: ${{ steps.merge.outputs.branch_name }}
+      has_changes: ${{ steps.merge.outputs.has_changes }}
+    steps:
+    - uses: actions/checkout@v7
+      with:
+        fetch-depth: 0
+
+    - name: CI Setup
+      uses: ./.github/actions/ci-setup
+      with:
+        python-version: USE_EXISTING_INSTALL
+        venv-path: ${{ env.VENV_PATH }}
+
+    - name: Install qai_hub_models from source
+      run: |
+        source ${{ env.VENV_PATH }}/bin/activate
+        pip install -e src/
+
+    - name: Download geniex perf.yaml update manifest
+      if: ${{ needs.collect_geniex_bench_perf.result == 'success' }}
+      uses: actions/download-artifact@v8
+      with:
+        name: geniex-perf-updates
+        path: ${{ github.workspace }}/_perf_updates
+
+    - name: Apply geniex perf.yaml updates & open PR
+      id: merge
+      env:
+        QAIHM_TEST_MODELS: ${{ inputs.model || 'all' }}
+        QAIHM_TEST_DEVICES: ${{ inputs.device || 'all' }}
+      run: |
+        set -eo pipefail
+        cd "$GITHUB_WORKSPACE"
+        source ${{ env.VENV_PATH }}/bin/activate
+
+        manifest="_perf_updates/geniex_perf_updates.json"
+        if [ ! -s "$manifest" ]; then
+          echo "has_changes=false" >> "$GITHUB_OUTPUT"
+          echo "No geniex perf manifest; skipping PR."
+          exit 0
+        fi
+
+        # Replay onto the workflow's checkout: add/update geniex entries
+        # only; existing genie numbers are untouched.
+        python -m qai_hub_models.scripts.run_geniex_perf_updates "$manifest"
+
+        git add -- 'src/qai_hub_models/models/*/perf.yaml'
+        if git diff --cached --quiet; then
+          echo "has_changes=false" >> "$GITHUB_OUTPUT"
+          echo "Applying the manifest produced no perf.yaml changes; skipping PR."
+          exit 0
+        fi
+
+        git config user.name 'github-actions[bot]'
+        git config user.email 'github-actions[bot]@users.noreply.github.com'
+        branch_name="perf/llm-perf-${{ github.run_id }}"
+        git checkout -b "$branch_name"
+        git commit -m "Add GenieX performance numbers
+
+        Models: $QAIHM_TEST_MODELS
+        Devices: $QAIHM_TEST_DEVICES"
+        git push -u origin "$branch_name"
+        echo "branch_name=$branch_name" >> "$GITHUB_OUTPUT"
+        echo "has_changes=true" >> "$GITHUB_OUTPUT"
+
+    - name: Open PR
+      if: ${{ steps.merge.outputs.has_changes == 'true' }}
+      uses: actions/github-script@v9
+      env:
+        QAIHM_TEST_MODELS: ${{ inputs.model || 'all' }}
+        QAIHM_TEST_DEVICES: ${{ inputs.device || 'all' }}
+        BRANCH_NAME: ${{ steps.merge.outputs.branch_name }}
+      with:
+        github-token: ${{ secrets.STAGING_GH_TOKEN }}
+        result-encoding: string
+        script: |
+          const { repo, owner } = context.repo;
+          const result = await github.rest.pulls.create({
+            title: `[Automated] Add GenieX performance numbers`,
+            owner,
+            repo,
+            head: process.env.BRANCH_NAME,
+            base: 'main',
+            body: [
+              'Generated automatically by GenieX Performance Collection workflow.',
+              '',
+              `Models: ${process.env.QAIHM_TEST_MODELS}`,
+              `Devices: ${process.env.QAIHM_TEST_DEVICES}`,
+              '',
+              'Workflow Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}',
+            ].join('\n')
+          });
+          console.log('PR created:', result.data.html_url);
+          return result.data.html_url;

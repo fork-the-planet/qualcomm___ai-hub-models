@@ -883,3 +883,41 @@ class GradeLLMResponsesTask(CompositeTask):
             continue_after_single_task_failure=True,
             raise_on_failure=raise_on_failure,
         )
+
+
+class GenieXBenchTask(RunCommandsWithVenvTask):
+    """Run geniex-bench benchmarks on QDC devices.
+
+    Configuration is passed via environment variables:
+    - QAIHM_MODELS: Comma-separated list of models or 'all'
+    - QAIHM_TEST_DEVICES: Comma-separated cs_* names or hub device names
+    - GENIEX_BENCH_PLUGIN: qairt | llama_cpp | all (default)
+    - QDC_API_TOKEN: API token for QDC authentication
+    """
+
+    def __init__(
+        self,
+        venv: str | None,
+        env: dict[str, str] | None = None,
+        raise_on_failure: bool = True,
+        ignore_return_codes: list[int] | None = None,
+    ) -> None:
+        models = os.environ.get("QAIHM_MODELS", "all")
+        devices = os.environ.get("QAIHM_TEST_DEVICES", "cs_x2_elite,cs_x_elite")
+        plugin = os.environ.get("GENIEX_BENCH_PLUGIN", "all")
+
+        command = (
+            f"python -m qai_hub_models.scripts.run_geniex_bench_benchmarks"
+            f' --models "{models}"'
+            f' --devices "{devices}"'
+            f' --plugin "{plugin}"'
+        )
+
+        super().__init__(
+            "geniex-bench Benchmarks",
+            venv,
+            [command],
+            env,
+            raise_on_failure,
+            ignore_return_codes or [],
+        )

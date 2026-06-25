@@ -191,17 +191,31 @@ def update_perf_yaml(
     tps: float,
     ttft_ms: float,
     prefill_tps: float | None = None,
+    profile_path: ScorecardProfilePath = ScorecardProfilePath.GENIE,
+    ttft_max_ms: float | None = None,
+    desired_compute_unit: str = "npu",
 ) -> None:
-    """Update the perf.yaml file for a model with new LLM metrics.
+    """Upsert one LLM metric into the model's perf.yaml.
 
-    Wrapped in a FileLock so concurrent xdist workers (one per
-    (precision, device) parametrization) don't race on the read-modify-write
-    of the same model's perf.yaml.
+    ttft_max_ms: written to time_to_first_token_range.max. geniex-bench
+    passes the actual max TTFT from multiple benchmark rounds. For genie,
+    it is estimated as ttft_ms * (context_length / 128).
+    desired_compute_unit: written to the entry; "npu" by default.
+    FileLock guards the read-modify-write against concurrent xdist workers.
     """
     perf_path = QAIHM_MODELS_ROOT / model_id / "perf.yaml"
     with FileLock(f"{perf_path}.lock"):
         _update_perf_yaml_locked(
-            model_id, device_name, precision, context_length, tps, ttft_ms, prefill_tps
+            model_id,
+            device_name,
+            precision,
+            context_length,
+            tps,
+            ttft_ms,
+            prefill_tps,
+            profile_path,
+            ttft_max_ms,
+            desired_compute_unit,
         )
 
 
@@ -213,6 +227,9 @@ def _update_perf_yaml_locked(
     tps: float,
     ttft_ms: float,
     prefill_tps: float | None = None,
+    profile_path: ScorecardProfilePath = ScorecardProfilePath.GENIE,
+    ttft_max_ms: float | None = None,
+    desired_compute_unit: str = "npu",
 ) -> None:
     perf = QAIHMModelPerf.from_model(model_id, not_exists_ok=True)
 
@@ -241,38 +258,65 @@ def _update_perf_yaml_locked(
         component_details.performance_metrics[device] = {}
 
     device_metrics = component_details.performance_metrics[device]
-    genie_path = ScorecardProfilePath.GENIE
 
-    if genie_path not in device_metrics:
-        device_metrics[genie_path] = QAIHMModelPerf.PerformanceDetails()
+    if profile_path not in device_metrics:
+        device_metrics[profile_path] = QAIHMModelPerf.PerformanceDetails()
 
-    perf_details = device_metrics[genie_path]
+    perf_details = device_metrics[profile_path]
 
-    # Max TTFT is estimated assuming linear scaling with prompt length.
-    estimated_max_ttft_ms = ttft_ms * (context_length / 128)
+    if ttft_max_ms is None:
+        # Legacy genie scaling; remove when GENIE retires.
+        ttft_max_ms = ttft_ms * (context_length / 128)
     llm_metric = QAIHMModelPerf.PerformanceDetails.LLMMetricsPerContextLength(
         context_length=context_length,
         tokens_per_second=tps,
         time_to_first_token_range_milliseconds=QAIHMModelPerf.PerformanceDetails.TimeToFirstTokenRangeMilliseconds(
             min=ttft_ms,
-            max=estimated_max_ttft_ms,
+            max=ttft_max_ms,
         ),
         prefill_tokens_per_second=prefill_tps,
-        # Genie collection targets the NPU.
-        desired_compute_unit="npu",
+        desired_compute_unit=desired_compute_unit,
     )
 
     if perf_details.llm_metrics is None:
-        perf_details.llm_metrics = [llm_metric]
-    else:
-        found = False
-        for i, existing in enumerate(perf_details.llm_metrics):
-            if existing.context_length == context_length:
-                perf_details.llm_metrics[i] = llm_metric
-                found = True
-                break
-        if not found:
-            perf_details.llm_metrics.append(llm_metric)
+        perf_details.llm_metrics = []
+    _upsert_metric(perf_details.llm_metrics, llm_metric)
 
     perf.to_model_yaml(model_id)
     print(f"Updated perf.yaml for {model_id}")
+
+
+def _upsert_metric(
+    bucket: list[QAIHMModelPerf.PerformanceDetails.LLMMetricsPerContextLength],
+    metric: QAIHMModelPerf.PerformanceDetails.LLMMetricsPerContextLength,
+) -> None:
+    """Replace the existing entry at the same (context_length, desired_compute_unit) or append."""
+    for i, existing in enumerate(bucket):
+        if (
+            existing.context_length == metric.context_length
+            and existing.desired_compute_unit == metric.desired_compute_unit
+        ):
+            bucket[i] = metric
+            return
+    bucket.append(metric)
+
+
+def clear_llm_metrics_for_profile_path(
+    model_id: str,
+    profile_path: ScorecardProfilePath,
+) -> None:
+    perf_path = QAIHM_MODELS_ROOT / model_id / "perf.yaml"
+    if not perf_path.exists():
+        return
+    with FileLock(f"{perf_path}.lock"):
+        perf = QAIHMModelPerf.from_model(model_id, not_exists_ok=True)
+        changed = False
+        for precision_details in perf.precisions.values():
+            for component_details in precision_details.components.values():
+                for device_metrics in component_details.performance_metrics.values():
+                    perf_details = device_metrics.get(profile_path)
+                    if perf_details is not None and perf_details.llm_metrics:
+                        perf_details.llm_metrics = []
+                        changed = True
+        if changed:
+            perf.to_model_yaml(model_id)
