@@ -1,0 +1,34 @@
+name: DeepSpeech2
+id: deepspeech2
+status: pending
+headline: End-to-end speech recognition model using CNN and bidirectional RNN layers with CTC loss.
+domain: Audio
+description: DeepSpeech2 is an end-to-end automatic speech recognition (ASR) model. It uses convolutional layers for feature extraction followed by bidirectional recurrent layers and CTC for sequence-to-sequence learning.
+use_case: Speech Recognition
+tags:
+  - foundation
+  - real-time
+applicable_scenarios:
+  - Voice Assistants
+  - Transcription Services
+  - Accessibility
+  - Voice Commands
+related_models:
+  - whisper_tiny
+form_factors:
+  - Phone
+  - Tablet
+  - IoT
+has_static_banner: true
+has_animated_banner: true
+dataset:
+- libri_speech_test_clean
+technical_details:
+  Input resolution: Spectrogram (3500 frames x 161 features)
+  Number of parameters: 94.6M
+  Model size: 330.48MB
+license_type: apache-2.0
+research_paper: https://arxiv.org/abs/1512.02595
+research_paper_title: "Deep Speech 2: End-to-End Speech Recognition in English and Mandarin"
+source_repo: https://github.com/SeanNaren/deepspeech.pytorch
+license: https://github.com/SeanNaren/deepspeech.pytorch/blob/master/LICENCE

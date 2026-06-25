@@ -1,0 +1,27 @@
+diff --git train_config.py train_config.py
+index 6873133..d3460b9 100644
+--- train_config.py
++++ train_config.py
+@@ -39,8 +39,8 @@ class DataConfig:
+     batch_size: int = 64  # Batch size for training
+     num_workers: int = 4  # Number of workers used in data-loading
+     labels_path: str = 'labels.json'  # Contains tokens for model output
+-    spect: SpectConfig = SpectConfig()
+-    augmentation: AugmentationConfig = AugmentationConfig()
++    spect: SpectConfig = field(default_factory=SpectConfig)
++    augmentation: AugmentationConfig = field(default_factory=AugmentationConfig)
+ 
+ 
+ @dataclass
+@@ -91,8 +91,8 @@ class DeepSpeechConfig:
+     optim: Any = MISSING
+     model: Any = MISSING
+     checkpoint: Any = MISSING
+-    trainer: DeepSpeechTrainerConf = DeepSpeechTrainerConf()
+-    data: DataConfig = DataConfig()
+-    augmentation: AugmentationConfig = AugmentationConfig()
++    trainer: DeepSpeechTrainerConf = field(default_factory=DeepSpeechTrainerConf)
++    data: DataConfig = field(default_factory=DataConfig)
++    augmentation: AugmentationConfig = field(default_factory=AugmentationConfig)
+     seed: int = 123456  # Seed for generators
+     load_auto_checkpoint: bool = False  # Automatically load the latest checkpoint from save folder

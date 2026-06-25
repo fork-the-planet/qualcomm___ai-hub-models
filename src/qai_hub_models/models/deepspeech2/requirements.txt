@@ -1,0 +1,21 @@
+numpy
+torchaudio>=2.4.0,<2.10.0
+soundfile>=0.12.1
+scipy>=1.7.0
+jiwer>=3.0.0
+omegaconf>=2.1.0
+hydra-core>=1.1.0,<1.4
+# deepspeech_pytorch imports pytorch_lightning at module level; must be listed
+# explicitly because global_requirements_incompatible: true means the global
+# environment is not available in isolated installs.
+pytorch-lightning==1.2.10
+# setuptools<82 is required because deepspeech_pytorch uses pkg_resources which
+# was removed in setuptools 82.
+setuptools<82.0.0
+# torchmetrics and Levenshtein are imported transitively by deepspeech_pytorch
+# at module level and must be pinned explicitly for the same reason as above.
+torchmetrics>=0.2.0,<0.6.0
+Levenshtein>=0.12.0,<1.0.0
+# google-cloud-storage is imported transitively by deepspeech_pytorch.checkpoint
+# at module level and must be listed explicitly for the same reason as above.
+google-cloud-storage

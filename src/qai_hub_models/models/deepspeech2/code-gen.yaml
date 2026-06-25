@@ -1,0 +1,5 @@
+supported_precisions:
+  - float
+global_requirements_incompatible: true
+has_on_target_demo: true
+pip_pre_build_reqs: git+https://github.com/SeanNaren/deepspeech.pytorch.git@709df90 git+https://github.com/romesco/hydra-lightning/#subdirectory=hydra-configs-pytorch-lightning --no-deps
