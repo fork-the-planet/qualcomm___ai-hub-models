@@ -55,6 +55,15 @@ precisions:
                   max: 4222.528
                 prefill_tokens_per_second: 424.4482116699219
                 desired_compute_unit: npu
+            geniex_qairt:
+              llm_metrics:
+              - context_length: 4096
+                tokens_per_second: 19.534953
+                time_to_first_token_range_milliseconds:
+                  min: 305.8920727272727
+                  max: 9788.546327272727
+                prefill_tokens_per_second: 418.448242
+                desired_compute_unit: npu
           Snapdragon X2 Elite CRD:
             genie:
               llm_metrics:
@@ -74,6 +83,15 @@ precisions:
                   min: 198.653
                   max: 6356.896
                 prefill_tokens_per_second: 281.9283752441406
+                desired_compute_unit: npu
+            geniex_qairt:
+              llm_metrics:
+              - context_length: 4096
+                tokens_per_second: 18.490501
+                time_to_first_token_range_milliseconds:
+                  min: 384.26763636363637
+                  max: 12296.564363636364
+                prefill_tokens_per_second: 333.101172
                 desired_compute_unit: npu
           Snapdragon 8 Elite QRD:
             genie:
@@ -153,6 +171,15 @@ precisions:
                   max: 1725.376
                 prefill_tokens_per_second: 1039.5010986328125
                 desired_compute_unit: npu
+            geniex_qairt:
+              llm_metrics:
+              - context_length: 4096
+                tokens_per_second: 40.237311
+                time_to_first_token_range_milliseconds:
+                  min: 143.91156363636364
+                  max: 4605.170036363636
+                prefill_tokens_per_second: 889.435128
+                desired_compute_unit: npu
           Snapdragon 8 Elite QRD:
             genie:
               llm_metrics:
@@ -161,6 +188,15 @@ precisions:
                 time_to_first_token_range_milliseconds:
                   min: 38.207
                   max: 1222.624
+                desired_compute_unit: npu
+            geniex_qairt:
+              llm_metrics:
+              - context_length: 4096
+                tokens_per_second: 67.97981
+                time_to_first_token_range_milliseconds:
+                  min: 86.46283636363636
+                  max: 2766.8107636363634
+                prefill_tokens_per_second: 1480.404823
                 desired_compute_unit: npu
           SA8255P ADP:
             genie:
