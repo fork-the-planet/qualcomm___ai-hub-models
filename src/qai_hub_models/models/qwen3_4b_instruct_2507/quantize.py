@@ -3,13 +3,17 @@
 # SPDX-License-Identifier: BSD-3-Clause
 # ---------------------------------------------------------------------
 from qai_hub_models.models._shared.llm.quantize import llm_quantize
-from qai_hub_models.models.qwen3_4b_instruct_2507 import MODEL_ID, FP_Model, Model
-from qai_hub_models.models.qwen3_4b_instruct_2507.model import SUPPORTED_PRECISIONS
+from qai_hub_models.models.qwen3_4b_instruct_2507.model import (
+    MODEL_ID,
+    SUPPORTED_PRECISIONS,
+    Qwen3_4B_Instruct_2507_PreSplit,
+    Qwen3_4B_Instruct_2507_QuantizablePreSplit,
+)
 
 if __name__ == "__main__":
     llm_quantize(
-        quantized_model_cls=Model,
-        fp_model_cls=FP_Model,
+        quantized_model_cls=Qwen3_4B_Instruct_2507_QuantizablePreSplit,
+        fp_model_cls=Qwen3_4B_Instruct_2507_PreSplit,
         model_id=MODEL_ID,
         supported_precisions=SUPPORTED_PRECISIONS,
         allow_cpu_to_quantize=True,

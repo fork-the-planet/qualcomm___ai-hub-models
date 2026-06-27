@@ -74,9 +74,6 @@ class KLDivEvaluator(LLMEvaluator):
 
         self.batch_index += 1
         assert output.logits is not None
-        logits = output.logits[0]
-
-        q_logsoft = F.log_softmax(logits, dim=-1)
 
         logits_p = target[0]
 
@@ -84,6 +81,12 @@ class KLDivEvaluator(LLMEvaluator):
             # This metric cannot be used on non-float targets
             raise ValueError("KLDivEvaluator requires floating point targets")
 
+        # Run on the reference's device (CPU) so kl_div doesn't mix devices / OOM the QuantSim GPU.
+        logits = output.logits[0]
+        if logits.device != logits_p.device:
+            logits = logits.detach().to(logits_p.device)
+
+        q_logsoft = F.log_softmax(logits, dim=-1)
         p_logsoft = F.log_softmax(logits_p, dim=-1)
 
         # KL divergence over entire vocabulary size
