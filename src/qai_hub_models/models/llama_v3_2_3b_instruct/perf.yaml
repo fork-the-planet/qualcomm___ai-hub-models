@@ -54,6 +54,15 @@ precisions:
                   max: 3785.696
                 prefill_tokens_per_second: 473.48486328125
                 desired_compute_unit: npu
+            geniex_qairt:
+              llm_metrics:
+              - context_length: 4096
+                tokens_per_second: 19.734949
+                time_to_first_token_range_milliseconds:
+                  min: 304.9262545454545
+                  max: 9757.640145454545
+                prefill_tokens_per_second: 419.773628
+                desired_compute_unit: npu
           Snapdragon X2 Elite CRD:
             genie:
               llm_metrics:
