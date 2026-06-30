@@ -12,6 +12,9 @@ OUT=$LOG/results
 MM_CACHE=/data/local/tmp/geniex-cache
 TC=/data/local/tmp/TestContent
 
+# QDC reuses device cells across jobs; wipe stale cell JSONs from a prior
+# run so compute_metrics doesn't ingest another model/plugin's results.
+rm -rf "$OUT"
 mkdir -p "$LOG" "$OUT" "$MM_CACHE"
 # Keep stdout off the SSH channel: `exec > >(tee ...) 2>&1` lets the process
 # substitution stall the channel until its 4 KiB stdout buffer fills, then

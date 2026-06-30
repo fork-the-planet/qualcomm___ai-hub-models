@@ -157,6 +157,9 @@ def _run_bench(
 def test_scorecard() -> None:
     _preflight_network()
     push_bundle()
+    # QDC reuses device cells across jobs; wipe stale cell JSONs from a prior
+    # run so compute_metrics doesn't ingest another model/plugin's results.
+    adb(f"rm -rf {DEVICE_RESULTS}", check=False)
     adb(f"mkdir -p {DEVICE_MM_CACHE} {DEVICE_RESULTS}")
     bundle_name: str | None = None
     if PLUGIN == "qairt" and os.path.isdir(HOST_QAIRT_BUNDLES):

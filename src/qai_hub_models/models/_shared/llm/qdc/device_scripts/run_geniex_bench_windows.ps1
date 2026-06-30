@@ -9,6 +9,9 @@ $OUT = "$LOG\results"
 $MM_CACHE = "C:\Temp\geniex-cache"
 $TC = "C:\Temp\TestContent"
 
+# QDC reuses device cells across jobs; wipe stale cell JSONs from a prior
+# run so compute_metrics doesn't ingest another model/plugin's results.
+Remove-Item -Recurse -Force $OUT -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Force -Path $LOG, $OUT, $MM_CACHE | Out-Null
 Start-Transcript -Path "$LOG\script.log" -Force | Out-Null
 
