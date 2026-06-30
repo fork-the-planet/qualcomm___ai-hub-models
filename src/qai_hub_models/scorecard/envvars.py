@@ -337,6 +337,28 @@ class IgnoreKnownFailuresEnvvar(QAIHMBoolEnvvar):
 
 
 @pytest_cli_envvar
+class CompileSingleInstantiationEnvvar(QAIHMBoolEnvvar):
+    """
+    If True, LLM compile/link tests use only a single instantiation to cut down
+    testing time.
+
+    Defaults to False so scorecard runs still compile every instantiation.
+    """
+
+    VARNAME = "QAIHM_TEST_COMPILE_SINGLE_INSTANTIATION"
+    CLI_ARGNAMES = ["--compile-single-instantiation"]
+    CLI_HELP_MESSAGE = (
+        "If set, LLM compile/link tests build a reduced set of instantiations "
+        "(largest context length and largest sequence length) "
+        "rather than every default instantiation."
+    )
+
+    @classmethod
+    def default(cls) -> bool:
+        return False
+
+
+@pytest_cli_envvar
 class IgnoreDeviceJobCacheEnvvar(QAIHMBoolEnvvar):
     """
     If this is false, when targeting prod, profile tests will check if the prerequisite compile job produced the same asset as last week's scorecard.

@@ -32,6 +32,11 @@ def run_and_get_output(command: str, check: bool = True) -> str:
 # Env Variable
 STORE_ROOT_ENV_VAR = "QAIHM_STORE_ROOT"
 
+# Set by PR compile tests to restrict split LLMs to a single instantiation.
+# Must match CompileSingleInstantiationEnvvar.VARNAME in
+# qai_hub_models.scorecard.envvars.
+COMPILE_SINGLE_INSTANTIATION_ENV_VAR = "QAIHM_TEST_COMPILE_SINGLE_INSTANTIATION"
+
 # Repository
 REPO_ROOT = str(Path(__file__).parent.parent.parent)
 VENV_PATH = os.path.join(REPO_ROOT, "qaihm-dev")

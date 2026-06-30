@@ -1264,15 +1264,28 @@ class DynamicSplitPartBase(LLMPartBase, torch.nn.Module, MultiGraphWorkbenchMode
         self._fp_session: onnxruntime.InferenceSession | None = None
         self._sequence_lengths = sequence_lengths
         self._context_lengths = context_lengths
-        self._graph_names: dict[str, tuple[int, int]] = {
+        self._graph_names: dict[str, tuple[int, int]] = self._build_graph_names(
+            self._sequence_lengths, self._context_lengths
+        )
+
+    def _build_graph_names(
+        self, sequence_lengths: list[int], context_lengths: list[int]
+    ) -> dict[str, tuple[int, int]]:
+        return {
             f"{'token' if seq_len == 1 else 'prompt'}_ar{seq_len}_cl{ctx_len}_{self.part_id}_of_{self.num_splits}": (
                 seq_len,
                 ctx_len,
             )
-            for seq_len, ctx_len in itertools.product(
-                self._sequence_lengths, self._context_lengths
-            )
+            for seq_len, ctx_len in itertools.product(sequence_lengths, context_lengths)
         }
+
+    def restrict_to_single_instantiation(self) -> None:
+        """Reduce this Part to a single (seq_len, ctx_len) graph."""
+        self._context_lengths = [max(self._context_lengths)]
+        self._sequence_lengths = [max(self._sequence_lengths)]
+        self._graph_names = self._build_graph_names(
+            self._sequence_lengths, self._context_lengths
+        )
 
     @property
     def graph_names(self) -> list[str]:
@@ -1619,6 +1632,12 @@ class DynamicSplitCollectionBase(MultiGraphWorkbenchModelCollection):
                 for part_name, part_cls in cls.parts.items()
             }
         )
+
+    def restrict_to_single_instantiation(self) -> None:
+        """Reduce every Part to a single instantiation."""
+        for component in self.components.values():
+            assert isinstance(component, self.part_base_cls)
+            component.restrict_to_single_instantiation()
 
     def write_supplementary_files(
         self,

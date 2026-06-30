@@ -15,6 +15,7 @@ from tempfile import TemporaryDirectory
 from .changes import get_all_models, get_changed_files_in_package
 from .constants import (
     BUILD_ROOT,
+    COMPILE_SINGLE_INSTANTIATION_ENV_VAR,
     PY_PACKAGE_INSTALL_ROOT,
     PY_PACKAGE_MODELS_ROOT,
     PY_PACKAGE_SRC_ROOT,
@@ -417,6 +418,9 @@ class PyTestModelTask(CompositeTask):
                         env = os.environ.copy()
                         if not use_shared_cache:
                             env[STORE_ROOT_ENV_VAR] = tmpdir
+                        # Cut down compile time for LLMs for PR runs
+                        if run_general and (run_compile or run_link):
+                            env[COMPILE_SINGLE_INSTANTIATION_ENV_VAR] = "1"
 
                         # Standard Test Suite
                         model_dir = os.path.join(PY_PACKAGE_MODELS_ROOT, model_name)

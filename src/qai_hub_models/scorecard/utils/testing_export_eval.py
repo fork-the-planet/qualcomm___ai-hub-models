@@ -38,6 +38,7 @@ from qai_hub_models.scorecard.artifacts import (
 )
 from qai_hub_models.scorecard.device import cs_universal
 from qai_hub_models.scorecard.envvars import (
+    CompileSingleInstantiationEnvvar,
     IgnoreDeviceJobCacheEnvvar,
     S3ArtifactsDirEnvvar,
 )
@@ -152,6 +153,15 @@ QAIHMModelT: TypeAlias = (
     | MultiGraphWorkbenchModel
     | MultiGraphCollectionModel
 )
+
+
+def _maybe_restrict_to_single_instantiation(model: Any) -> None:
+    """Restrict an LLM model to a single instantiation (for quicker testing)"""
+    if not CompileSingleInstantiationEnvvar.get():
+        return
+    restrict = getattr(model, "restrict_to_single_instantiation", None)
+    if callable(restrict):
+        restrict()
 
 
 def _get_components_and_graph_names(
@@ -722,6 +732,7 @@ def compile_via_export(
     upload_model
         Export script function to serialize and upload models.
     """
+    _maybe_restrict_to_single_instantiation(model)
     component_names, graph_names, component_graph_names = (
         _get_components_and_graph_names(model, model_id)
     )
@@ -841,6 +852,7 @@ def link_via_export(
     """
     assert scorecard_path.runtime.uses_hub_link
 
+    _maybe_restrict_to_single_instantiation(model)
     component_names, graph_names, component_graph_names = (
         _get_components_and_graph_names(model, model_id)
     )
