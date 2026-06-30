@@ -213,3 +213,9 @@ llama_v3_2_3b_instruct_ssd:
 - part2_of_4
 - part3_of_4
 - part4_of_4
+qwen3_vl_4b_instruct:
+- vision_encoder
+- part1_of_4
+- part2_of_4
+- part3_of_4
+- part4_of_4
