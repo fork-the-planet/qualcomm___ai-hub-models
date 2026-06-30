@@ -501,7 +501,7 @@ def export_model(
             ij_output,
             torch_out,
             list(model.get_output_spec()),
-            outputs_to_skip=[2],
+            outputs_to_skip=[0, 2],
         )
 
     if not skip_summary:

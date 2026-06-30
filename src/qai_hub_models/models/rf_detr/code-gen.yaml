@@ -1,7 +1,6 @@
-external_repos:
-  rf_detr:
-    repo_url: https://github.com/roboflow/rf-detr.git
-    commit_sha: 1e63dbad402eea10f110e86013361d6b02ee0c09
+supported_precisions:
+- float
 has_on_target_demo: true
 outputs_to_skip_validation:
+  '0': PSNR is not a meaningful metric for pixel-space bounding box coordinates
   '2': Boxes with low confidence disagree on class index between torch and on-device
