@@ -5,7 +5,9 @@
 import argparse
 import sys
 from collections.abc import Callable, Iterable
+from functools import partial
 from importlib.metadata import PackageNotFoundError, version
+from typing import Any
 
 from packaging.version import Version
 from prettytable import PrettyTable
@@ -1179,6 +1181,81 @@ def add_validate_aws_parser(
     return parser
 
 
+class _GroupedHelpFormatter(argparse.RawDescriptionHelpFormatter):
+    """Lists subcommands grouped into titled sections in the top-level help.
+
+    argparse has no native support for sectioning subcommands; it renders every
+    choice in one flat ``positional arguments`` block. This formatter suppresses
+    that block and appends a grouped rendering driven by ``self.sections``: an
+    ordered ``{title: [command_name, ...]}`` dict. The subparsers action and the
+    sections are passed in at construction (via ``functools.partial`` as the
+    ``formatter_class``), so neither method depends on the other's call order.
+    Commands absent from the action (e.g. the conditionally-registered
+    ``validate_aws_credentials``) are skipped, so the same mapping works
+    regardless of which subcommands are present.
+    """
+
+    def __init__(
+        self,
+        *args: Any,
+        subparsers_action: argparse.Action | None = None,
+        sections: dict[str, list[str]] | None = None,
+        **kwargs: Any,
+    ) -> None:
+        super().__init__(*args, **kwargs)
+        self._subparsers_action = subparsers_action
+        self.sections = sections or {}
+
+    def _format_action(self, action: argparse.Action) -> str:
+        if action is self._subparsers_action:
+            return ""
+        return super()._format_action(action)
+
+    def format_help(self) -> str:
+        text = super().format_help()
+        action = self._subparsers_action
+        if action is None or not self.sections:
+            return text
+
+        registered: dict[str, argparse.ArgumentParser] = dict(action.choices or {})
+        help_by_name = {
+            a.dest: (a.help or "") for a in getattr(action, "_choices_actions", [])
+        }
+
+        def invocation(name: str) -> str:
+            """``name`` followed by its subparser's positional metavars.
+
+            Each positional is rendered as ``<dest>`` (with nargs decoration,
+            e.g. ``[<model>]`` for an optional one) to match the ``<model>``
+            placeholder convention used elsewhere in the CLI's help text.
+            """
+            subparser = registered[name]
+            positionals = [
+                self._format_args(a, f"<{a.dest}>")
+                for a in subparser._get_positional_actions()
+            ]
+            return " ".join([name, *positionals])
+
+        displayed = [
+            (title, [(n, invocation(n)) for n in names if n in registered])
+            for title, names in self.sections.items()
+        ]
+        width = max(
+            (len(label) for _, items in displayed for _, label in items), default=0
+        )
+        blocks = []
+        for title, items in displayed:
+            if not items:
+                continue
+            lines = [f"{title}:"]
+            lines += [
+                f"  {label:<{width}}  {help_by_name.get(name, '')}"
+                for name, label in items
+            ]
+            blocks.append("\n".join(lines))
+        return text.rstrip() + "\n\n" + "\n\n".join(blocks) + "\n"
+
+
 def main(args: list[str] | None = None) -> None:
     _check_version_match()
 
@@ -1191,7 +1268,7 @@ def main(args: list[str] | None = None) -> None:
         action="version",
         version=f"%(prog)s {CURRENT_VERSION}",
     )
-    subparsers = parser.add_subparsers()
+    subparsers = parser.add_subparsers(metavar="<command>")
 
     add_fetch_parser(subparsers)
     add_info_parser(subparsers)
@@ -1205,6 +1282,31 @@ def main(args: list[str] | None = None) -> None:
     add_versions_parser(subparsers)
     if use_internal_releases() or is_internal_repo():
         add_validate_aws_parser(subparsers)
+
+    sections = {
+        "Models": [
+            "fetch",
+            "info",
+            "perf",
+            "numerics",
+            "find",
+        ],
+        "Customized Models (export from source)": [
+            "export",
+            "evaluate",
+        ],
+        "Catalog": [
+            "models",
+            "devices",
+            "chipsets",
+            "runtimes",
+            "versions",
+        ],
+        "Qualcomm Internal": ["validate_aws_credentials"],
+    }
+    parser.formatter_class = partial(
+        _GroupedHelpFormatter, subparsers_action=subparsers, sections=sections
+    )
 
     parsed = parser.parse_args(args)
     if hasattr(parsed, "func"):
