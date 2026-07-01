@@ -12,7 +12,6 @@ from typing_extensions import Self
 
 from qai_hub_models import (
     Precision,
-    TargetRuntime,
 )
 from qai_hub_models.datasets.coco import CocoBodyDataset
 from qai_hub_models.evaluators.movenet_evaluator import MovenetPoseEvaluator
@@ -23,7 +22,7 @@ from qai_hub_models.models.movenet.external_repos.movenet_pytorch.movenet.models
 from qai_hub_models.utils.asset_loaders import CachedWebModelAsset
 from qai_hub_models.utils.base_dataset import BaseDataset
 from qai_hub_models.utils.base_evaluator import BaseEvaluator
-from qai_hub_models.utils.base_model import BaseModel
+from qai_hub_models.utils.base_model import BaseModel, SerializationSettings
 from qai_hub_models.utils.input_spec import (
     ColorFormat,
     ImageMetadata,
@@ -43,6 +42,9 @@ OUTPUT_STRIDE = 16
 
 
 class Movenet(BaseModel):
+    def __init__(self, model: torch.nn.Module) -> None:
+        super().__init__(model, SerializationSettings(use_pt2=False))
+
     @classmethod
     def from_pretrained(
         cls,
@@ -103,19 +105,6 @@ class Movenet(BaseModel):
         return {
             "kpt_with_conf": TensorSpec(),
         }
-
-    def get_hub_profile_options(
-        self,
-        target_runtime: TargetRuntime,
-        other_profile_options: str = "",
-        context_graph_name: str | None = None,
-    ) -> str:
-        # NPU has accuracy issues; force CPU execution.
-        if "--compute_unit" not in other_profile_options:
-            other_profile_options = f"--compute_unit cpu {other_profile_options}"
-        return super().get_hub_profile_options(
-            target_runtime, other_profile_options, context_graph_name
-        )
 
     def get_evaluator(self, name: str | None = None) -> BaseEvaluator:
         h, w = self.get_input_spec()["image"][0][2:]

@@ -1,15 +1,144 @@
 # Removes input permute since preprocessing now provides NCHW layout directly.
+# Rewrites the pose-decode to be fp16/NPU-safe. The original decode flattened the
+# 48x48 feature map and ran argmax over H*W (indices up to 2303), then rebuilt
+# (y, x) via div/mod. On the NPU (fp16) integers above 2048 are not exact, so
+# any peak in the bottom rows decoded to the wrong coordinate. The fix uses a
+# separable 2-D argmax (coords stay <= 47, exact in fp16) and reads values with
+# permute+matmul ops (QNN DLC compatible). Bit-exact with the original in fp32.
 #
 diff --git a/movenet/models/movenet.py b/movenet/models/movenet.py
-index 3e3ee8c..43b718c 100644
+index 3e3ee8c..009a7e6 100644
 --- a/movenet/models/movenet.py
 +++ b/movenet/models/movenet.py
-@@ -88,7 +88,7 @@ class MoveNet(nn.Module):
+@@ -61,6 +61,10 @@ class MoveNet(nn.Module):
+         self.weight_to_center = self._generate_center_dist(self.ft_size).unsqueeze(2)
+  
+         self.dist_y, self.dist_x = self._generate_dist_map(self.ft_size)
++        # Axis index vector used to build one-hot row/col selectors during decode.
++        # Keeping coordinates in [0, ft_size-1] avoids forming flat indices that
++        # exceed the fp16 exact-integer limit (2048) on the NPU.
++        self.axis_index = torch.arange(int(self.ft_size)).float()
+         # self.index_17 = torch.arange(0, 17).float()
+ 
+         for head in self.heads:
+@@ -85,10 +89,10 @@ class MoveNet(nn.Module):
+         device = x.device
+         self.weight_to_center = self.weight_to_center.to(device)
+         self.dist_y, self.dist_x = self.dist_y.to(device), self.dist_x.to(device)
++        self.axis_index = self.axis_index.to(device)
          
          # conv forward
          x  = x * 0.007843137718737125 - 1.0
 -        x = x.permute(0, 3, 1, 2)
-+        #
          x = self.backbone(x)
          ret = {}
          for head in self.heads:
+@@ -135,54 +139,68 @@ class MoveNet(nn.Module):
+         return y, x
+ 
+ 
++    def _peak_2d(self, scores, ft_size=48):
++        """Locate the per-channel spatial peak without ever flattening H*W.
++
++        A plain ``argmax`` over the flattened ``ft_size*ft_size`` grid returns
++        indices up to 2303 for a 48x48 map.  fp16 (used by the NPU) can only
++        represent integers exactly up to 2048, so reconstructing ``(y, x)`` from
++        such an index -- and gathering at it -- silently corrupts every peak in the
++        bottom rows.  Instead we run a separable 2-D argmax: the global peak's row
++        is the argmax of the per-row maxima and its column is the argmax of the
++        per-column maxima.  Both coordinates stay in ``[0, ft_size-1]`` (<= 47),
++        which is exact in fp16.  One-hot row/col selectors are returned so values
++        can be read with a multiply-reduce instead of an (unsupported) gather.
++
++        scores: [H, W, C]
++        returns y, x: [C] float coords; oh_y: [C, H], oh_x: [C, W] one-hot.
++        """
++        s = scores.permute(2, 0, 1)                       # [C, H, W]
++        y = s.max(dim=2).values.argmax(dim=1).float()     # [C]
++        x = s.max(dim=1).values.argmax(dim=1).float()     # [C]
++        axis = self.axis_index.reshape(1, ft_size)
++        oh_y = (axis == y.reshape(-1, 1)).to(scores.dtype)  # [C, H]
++        oh_x = (axis == x.reshape(-1, 1)).to(scores.dtype)  # [C, W]
++        return y, x, oh_y, oh_x
++
+     def _top_with_center(self, center, ft_size=48):
+-        scores = center * self.weight_to_center
+-        top_ind = torch.argmax(scores.view(1, ft_size * ft_size, 1), dim=1)
+-        return top_ind
+-
+-    def _center_to_kpt(self, kpt_regress, ct_ind, ft_size=48.0):
+-        # ct_y = torch.div(ct_ind, ft_size, rounding_mode='floor')
+-        ct_y = (ct_ind / ft_size).int().float()
+-        # ct_y = torch.floor_divide(ct_ind.float(), ft_size)
+-        ct_x = ct_ind - ct_y * ft_size
+-
+-        kpt_regress = kpt_regress.view(-1, 17, 2)
+-        ct_ind = ct_ind.unsqueeze(2).expand(ct_ind.size(0), 17, 2)
+-        kpt_coor = kpt_regress.gather(0, ct_ind).squeeze(0)
+-        
+-        kpt_coor = kpt_coor + torch.cat((ct_y, ct_x), dim=1)
+-        
++        # center: [H, W, 1] -> single-channel peak, coords in [0, ft_size-1].
++        cy, cx, oh_y, oh_x = self._peak_2d(center * self.weight_to_center, ft_size)
++        return cy, cx, oh_y, oh_x
++
++    def _center_to_kpt(self, kpt_regress, ct_ind, ft_size=48.0):
++        cy, cx, oh_y, oh_x = ct_ind
++        ft = int(ft_size)
++        kpt_regress = kpt_regress.reshape(ft, ft, 17, 2)        # [H, W, 17, 2]
++        _weight_hw = oh_y[0].unsqueeze(1) * oh_x[0].unsqueeze(0)  # [H, W]
++        kpt_coor = (_weight_hw.reshape(1, ft * ft) @ kpt_regress.reshape(ft * ft, 17 * 2)).reshape(17, 2)
++        center_yx = torch.stack((cy, cx), dim=1)                 # [1, 2]
++        kpt_coor = kpt_coor + center_yx
+         return kpt_coor
+ 
+     def _kpt_from_heatmap(self, kpt_heatmap, kpt_coor, ft_size=48):
+         y = self.dist_y - kpt_coor[:, 0].reshape(1, 1, 17)
+         x = self.dist_x - kpt_coor[:, 1].reshape(1, 1, 17)
+         dist_weight = torch.sqrt(y * y + x * x) + 1.8
+-        
+-        scores = kpt_heatmap / dist_weight
+-        scores = scores.reshape((1, ft_size * ft_size, 17))
+-        top_inds = torch.argmax(scores, dim=1)
+-        
+-        return top_inds
+-    
+-    def _kpt_from_offset(self, kpt_offset, kpt_top_inds, kpt_heatmap, size=48.0):
+-        # kpt_top_inds_float = kpt_top_inds.float()
+-        # kpts_ys = torch.div(kpt_top_inds, size, rounding_mode='floor')
+-        kpts_ys = (kpt_top_inds / size).int().float()
+-        # kpts_ys = torch.floor_divide(kpt_top_inds.float(), size)
+-        kpts_xs = kpt_top_inds - kpts_ys * size
+-        kpt_coordinate = torch.stack((kpts_ys.squeeze(0), kpts_xs.squeeze(0)), dim=1)
+-
+-        kpt_heatmap = kpt_heatmap.view(-1, 17)
+-        kpt_conf = kpt_heatmap.gather(0, kpt_top_inds).squeeze(0)
+-
+-        kpt_offset = kpt_offset.view(-1, 17, 2)
+-        kpt_top_inds = kpt_top_inds.unsqueeze(2).expand(kpt_top_inds.size(0), 17, 2)
+-        kpt_offset_yx = kpt_offset.gather(0, kpt_top_inds).squeeze(0)
+-
+-        kpt_coordinate= (kpt_offset_yx + kpt_coordinate) / size
+-        kpt_with_conf = torch.cat([kpt_coordinate, kpt_conf.unsqueeze(1)], dim=1).reshape((1, 1, 17, 3))
+ 
++        scores = kpt_heatmap / dist_weight                # [H, W, 17]
++        return self._peak_2d(scores, ft_size)             # per-keypoint peaks
++
++    def _kpt_from_offset(self, kpt_offset, kpt_top_inds, kpt_heatmap, size=48.0):
++        ft = int(size)
++        ky, kx, oh_y, oh_x = kpt_top_inds
++        kpt_coordinate = torch.stack((ky, kx), dim=1)     # [17, 2]
++
++        _hm = kpt_heatmap.permute(2, 0, 1)                              # [C, H, W]
++        kpt_conf = (oh_y.unsqueeze(2) * _hm).sum(1).mul(oh_x).sum(1)   # [C]
++        kpt_offset = kpt_offset.reshape(ft, ft, 17, 2)    # [H, W, 17, 2]
++        _ko = kpt_offset.permute(2, 0, 1, 3)                                        # [C, H, W, J]
++        kpt_offset_yx = (oh_y.unsqueeze(2).unsqueeze(3) * _ko).sum(1).mul(oh_x.unsqueeze(2)).sum(1)  # [C, J]
++
++        kpt_coordinate = (kpt_offset_yx + kpt_coordinate) / size
++        kpt_with_conf = torch.cat(
++            [kpt_coordinate, kpt_conf.unsqueeze(1)], dim=1
++        ).reshape((1, 1, 17, 3))
+         return kpt_with_conf
+ 
+ 
