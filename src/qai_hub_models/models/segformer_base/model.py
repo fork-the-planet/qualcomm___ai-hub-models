@@ -65,7 +65,10 @@ class SegformerBase(BaseModel):
             where the modified height and width will be some factor smaller
             than the input image.
         """
-        return self.model(normalize_image_torchvision(image_tensor), return_dict=False)
+        # self.model()... returns a tuple[Tensor] of length 1
+        return self.model(normalize_image_torchvision(image_tensor), return_dict=False)[
+            0
+        ]
 
     def get_input_spec(
         self,

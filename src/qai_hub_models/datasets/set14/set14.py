@@ -28,7 +28,7 @@ SET14_ASSET = CachedWebDatasetAsset(
     SET14_FOLDER_NAME,
     SET14_VERSION,
     "Set14_HR.tar.gz",
-    private_s3_key="qai-hub-models/datasets/Set14/Set14_HR.tar.gz",
+    private_s3_key="qai-hub-models/datasets/set14/Set14_HR.tar.gz",
 )
 NUM_IMAGES = 14
 
@@ -47,7 +47,7 @@ class Set14Dataset(BaseDataset):
         self,
         split: DatasetSplit = DatasetSplit.VAL,
         input_spec: InputSpec | None = None,
-        scaling_factor: int = 2,
+        scaling_factor: int = 4,
     ) -> None:
         self.set14_path = SET14_ASSET.extracted_path
         BaseDataset.__init__(self, self.set14_path, split, input_spec)

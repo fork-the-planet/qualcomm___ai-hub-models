@@ -55,14 +55,6 @@ class Real_ESRGAN_x4plus(SuperResolutionModel):
     def forward(self, image: torch.Tensor) -> torch.Tensor:
         return super().forward(image).clamp_(0, 1)
 
-    @staticmethod
-    def eval_datasets() -> list[str]:
-        return ["bsd100", "bsd300"]
-
-    @staticmethod
-    def calibration_dataset_name() -> str:
-        return "bsd300"
-
 
 def _get_weightsfile_from_name(
     weights_name: str = DEFAULT_WEIGHTS,

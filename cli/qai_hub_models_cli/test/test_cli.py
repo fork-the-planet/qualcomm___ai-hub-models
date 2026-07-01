@@ -55,8 +55,10 @@ def test_check_version_match(
 
 @pytest.mark.parametrize("script", ["export", "evaluate"])
 def test_dispatch_forwards_remaining_args_to_model_parser(script: str) -> None:
-    """`<script> <model> --flag value` hands model-specific args to dispatch verbatim,
-    and resolves the manifest entry against CURRENT_VERSION.
+    """`<script> <model> --flag value` hands model-specific args to dispatch verbatim.
+
+    When the model arg is already a valid installed model ID, dispatch skips the
+    (slow) manifest lookup and forwards straight to the model's parser.
     """
     fake_entry = MagicMock()
     fake_entry.id = "mobilenet_v2"
@@ -71,7 +73,8 @@ def test_dispatch_forwards_remaining_args_to_model_parser(script: str) -> None:
         patch("qai_hub_models.cli.dispatch.run_model_script") as mock_run,
     ):
         main([script, "mobilenet_v2", "--target-runtime", "tflite"])
-    mock_get_entry.assert_called_once_with("mobilenet_v2", "9.9.9")
+    # mobilenet_v2 is a valid installed model ID, so the manifest lookup is skipped.
+    mock_get_entry.assert_not_called()
     mock_run.assert_called_once_with(
         model_id="mobilenet_v2",
         script=script,
@@ -92,16 +95,24 @@ def test_dispatch_missing_model_arg_exits_with_usage_hint() -> None:
 
 
 def test_dispatch_model_not_in_installed_package_exits() -> None:
-    """Manifest lists the model but it's not in MODEL_IDS -> clean error."""
+    """Manifest lists the model but it's not in MODEL_IDS -> clean error.
+
+    An arg that isn't a valid installed model ID falls back to the manifest
+    lookup (resolved against CURRENT_VERSION).
+    """
     fake_entry = MagicMock()
     fake_entry.id = "future_model"
     with (
         patch("qai_hub_models_cli.cli._check_version_match"),
         patch("qai_hub_models_cli.cli.is_heavy_package_installed", return_value=True),
-        patch("qai_hub_models_cli.cli.get_manifest_entry", return_value=fake_entry),
+        patch("qai_hub_models_cli.cli.CURRENT_VERSION", "9.9.9"),
+        patch(
+            "qai_hub_models_cli.cli.get_manifest_entry", return_value=fake_entry
+        ) as mock_get_entry,
         patch("qai_hub_models.utils.path_helpers.MODEL_IDS", {"mobilenet_v2"}),
         pytest.raises(SystemExit) as exc_info,
     ):
         main(["export", "future_model"])
+    mock_get_entry.assert_called_once_with("future_model", "9.9.9")
     assert "future_model" in str(exc_info.value)
     assert "installed qai_hub_models package" in str(exc_info.value)

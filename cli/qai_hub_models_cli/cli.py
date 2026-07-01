@@ -522,19 +522,30 @@ def _dispatch_export_or_evaluate(script: str, raw_args: list[str]) -> None:
         )
     model_arg, forwarded = raw_args[0], list(raw_args[1:])
 
-    entry = get_manifest_entry(model_arg, CURRENT_VERSION)
     from qai_hub_models.utils.path_helpers import MODEL_IDS
 
-    if entry.id not in MODEL_IDS:
-        sys.exit(
-            f"Model {entry.id!r} is in the v{CURRENT_VERSION} manifest but not "
-            f"in the installed qai_hub_models package. Upgrade with "
-            f"`pip install -U qai_hub_models`."
-        )
+    model_id = model_arg
+    if model_id not in MODEL_IDS:
+        # get_manifest_entry will rebuild the manifest for internal dev versions (which takes a long time).
+        # We only call it if model_args does not exactly map to a model ID.
+        model_id = get_manifest_entry(model_arg, CURRENT_VERSION).id
+        if model_id not in MODEL_IDS:
+            sys.exit(
+                f"Model {model_id!r} is in the v{CURRENT_VERSION} manifest but not "
+                f"in the installed qai_hub_models package. Upgrade with "
+                f"`pip install -U qai_hub_models`."
+            )
 
     from qai_hub_models.cli.dispatch import run_model_script
 
-    run_model_script(model_id=entry.id, script=script, forwarded=forwarded)
+    try:
+        run_model_script(model_id=model_id, script=script, forwarded=forwarded)
+    except Exception as e:
+        raise RuntimeError(
+            f"\nSomething went wrong (an exception was thrown). Email us at ai-hub-support@qti.qualcomm.com for assistance.\n\n"
+            f"Enable a full stack trace by setting the following environment variable: `{VERBOSE_EXCEPTIONS_ENVVAR}=1`. \n"
+            "You should include the stack trace in your support request."
+        ) from e
 
 
 def _warn_missing_qaihm_install(

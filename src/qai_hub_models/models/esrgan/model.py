@@ -41,14 +41,6 @@ class ESRGAN(SuperResolutionModel):
 
         return cls(esrgan_model)
 
-    @staticmethod
-    def eval_datasets() -> list[str]:
-        return ["bsd100", "bsd300"]
-
-    @staticmethod
-    def calibration_dataset_name() -> str:
-        return "bsd300"
-
 
 def _load_esrgan_source_model_from_weights(
     weights_path: str | os.PathLike | None = None,

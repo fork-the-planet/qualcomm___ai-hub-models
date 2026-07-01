@@ -42,14 +42,6 @@ class Real_ESRGAN_General_x4v3(SuperResolutionModel):
 
         return cls(realesrgan_model)
 
-    @staticmethod
-    def eval_datasets() -> list[str]:
-        return ["bsd100", "bsd300"]
-
-    @staticmethod
-    def calibration_dataset_name() -> str:
-        return "bsd300"
-
 
 def _load_realesrgan_source_model_from_weights(
     weights_name_or_path: str,
