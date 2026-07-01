@@ -12,8 +12,9 @@ from ruamel.yaml import YAML
 from typing_extensions import Self
 
 from qai_hub_models import SampleInputsType
+from qai_hub_models.datasets.pandaset import PandaSetDataset
+from qai_hub_models.datasets.semantic_kitti import SemanticKittiDataset
 from qai_hub_models.evaluators.semantic_kitti_evaluator import SemanticKittiEvaluator
-from qai_hub_models.models.salsanext.dataset import SemanticKittiDataset
 from qai_hub_models.models.salsanext.external_repos.salsanext.train.common.laserscan import (
     SemLaserScan,
 )
@@ -133,7 +134,7 @@ class SalsaNext(BaseModel):
         return [SemanticKittiDataset]
 
     def get_calibration_dataset_cls(self) -> type[BaseDataset]:
-        return SemanticKittiDataset
+        return PandaSetDataset
 
     def get_evaluator(self) -> BaseEvaluator:
         with open(DATA_ADDRESS) as f:

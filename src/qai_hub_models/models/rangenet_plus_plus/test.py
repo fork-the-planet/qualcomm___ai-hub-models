@@ -5,6 +5,7 @@
 
 import numpy as np
 import pytest
+import torch
 
 from qai_hub_models.models.rangenet_plus_plus.app import (
     RangeNetApp,
@@ -33,8 +34,10 @@ def test_task() -> None:
     ).reshape(-1, 4)
     range_image, _, _ = project_points_to_range_image(points)
 
-    # Run inference
-    mask = app.segment_range_image(range_image, raw_output=True)
+    # Run inference — raw_output returns logits [1, NUM_CLASSES, H, W];
+    # apply argmax to get the class-index mask [1, H, W] for comparison.
+    logits = app.segment_range_image(range_image, raw_output=True)
+    mask = torch.argmax(torch.from_numpy(logits), dim=1).numpy()
 
     expected_mask = np.load(str(OUTPUT_MASK_ADDRESS.fetch()))
     assert_most_same(mask, expected_mask, diff_tol=0.0)
@@ -51,7 +54,8 @@ def test_trace() -> None:
     ).reshape(-1, 4)
     range_image, _, _ = project_points_to_range_image(points)
 
-    mask = app.segment_range_image(range_image, raw_output=True)
+    logits = app.segment_range_image(range_image, raw_output=True)
+    mask = torch.argmax(torch.from_numpy(logits), dim=1).numpy()
     expected_mask = np.load(str(OUTPUT_MASK_ADDRESS.fetch()))
     assert_most_same(mask, expected_mask, diff_tol=0.0)
 

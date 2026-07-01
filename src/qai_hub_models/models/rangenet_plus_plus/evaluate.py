@@ -16,7 +16,7 @@ from qai_hub_models.models.protocols import ExecutableModelProtocol
 from qai_hub_models.models.rangenet_plus_plus import MODEL_ID, Model
 from qai_hub_models.models.rangenet_plus_plus.export import export_model
 from qai_hub_models.utils.args import evaluate_parser, get_model_kwargs
-from qai_hub_models.utils.evaluate import evaluate_on_dataset
+from qai_hub_models.utils.evaluate import _load_quant_cpu_onnx, evaluate_on_dataset
 from qai_hub_models.utils.inference import AsyncOnDeviceModel, compile_model_from_args
 from qai_hub_models.utils.input_spec import InputSpec
 from qai_hub_models.utils.kwarg_helpers import filter_kwargs
@@ -30,13 +30,18 @@ def main() -> None:
             TargetRuntime.TFLITE,
             TargetRuntime.ONNX,
         ],
+        Precision.w8a16: [
+            TargetRuntime.QNN_DLC,
+            TargetRuntime.QNN_CONTEXT_BINARY,
+            TargetRuntime.ONNX,
+            TargetRuntime.PRECOMPILED_QNN_ONNX,
+        ],
     }
 
     parser = evaluate_parser(
         model_cls=Model,
         supported_dataset_classes=eval_dataset_classes,
         supported_precision_runtimes=supported_precision_runtimes,
-        uses_quantize_job=False,
         default_device="Samsung Galaxy S25 (Family)",
     )
     args = parser.parse_args()
@@ -66,7 +71,7 @@ def main() -> None:
         model_executors["torch"] = torch_model
         input_spec = torch_model.get_input_spec(**input_spec_kwargs)
 
-    if not args.skip_device_accuracy:
+    if not args.skip_device_accuracy or args.compute_quant_cpu_accuracy:
         if args.hub_model_id is not None:
             compiled_model: hub.Model = hub.get_model(args.hub_model_id)
         else:
@@ -87,6 +92,8 @@ def main() -> None:
         )
         if not args.skip_device_accuracy:
             model_executors["on-device"] = on_device_model
+        if args.compute_quant_cpu_accuracy and args.precision != Precision.float:
+            model_executors["quant cpu"] = _load_quant_cpu_onnx(compiled_model)
         input_spec = on_device_model.get_input_spec()
 
     if input_spec is None:

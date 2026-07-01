@@ -15,10 +15,15 @@ from typing_extensions import Self
 
 from qai_hub_models import SampleInputsType
 from qai_hub_models.configs.tensor_spec import TensorSpec
+from qai_hub_models.datasets.pandaset import PandaSetDataset
+from qai_hub_models.datasets.semantic_kitti import SemanticKittiDataset
+from qai_hub_models.evaluators.semantic_kitti_evaluator import SemanticKittiEvaluator
 from qai_hub_models.models.rangenet_plus_plus.external_repos.lidar_bonnetal.train.tasks.semantic.modules.segmentator import (
     Segmentator,
 )
 from qai_hub_models.utils.asset_loaders import CachedWebModelAsset
+from qai_hub_models.utils.base_dataset import BaseDataset
+from qai_hub_models.utils.base_evaluator import BaseEvaluator
 from qai_hub_models.utils.base_model import BaseModel
 from qai_hub_models.utils.input_spec import InputSpec, OutputSpec
 
@@ -49,7 +54,10 @@ class RangeNetPlusPlus(BaseModel):
 
     def __init__(self, model: nn.Module) -> None:
         super().__init__()
-        self.model = model
+        self.model: Segmentator = model  # type: ignore[assignment]
+        self.learning_map: dict[int, int] = {}
+        self.learning_ignore: dict[int, bool] = {}
+        self.knn_params: dict = {}
 
     @classmethod
     def from_pretrained(
@@ -72,17 +80,28 @@ class RangeNetPlusPlus(BaseModel):
         if model_dir is None:
             model_dir = DARKNET53_MODEL_ASSET.fetch(extract=True)
 
-        config_path = Path(model_dir) / "arch_cfg.yaml"
-        with open(config_path) as f:
+        model_dir = Path(model_dir)
+        with open(model_dir / "arch_cfg.yaml") as f:
             arch_cfg = YAML(typ="safe", pure=True).load(f)
+        with open(model_dir / "data_cfg.yaml") as f:
+            data_cfg = YAML(typ="safe", pure=True).load(f)
 
         model = Segmentator(arch_cfg, NUM_CLASSES, path=str(model_dir))
+        model.cpu()
         model.eval()
-        return cls(model)
+        instance = cls(model)
+        instance.learning_map = {
+            int(k): int(v) for k, v in data_cfg["learning_map"].items()
+        }
+        instance.learning_ignore = {
+            int(k): bool(v) for k, v in data_cfg["learning_ignore"].items()
+        }
+        instance.knn_params = arch_cfg["post"]["KNN"]["params"]
+        return instance
 
     def forward(self, range_image: torch.Tensor) -> torch.Tensor:
         """
-        Predict semantic labels for a LiDAR range image.
+        Predict per-class logits for a LiDAR range image.
 
         Parameters
         ----------
@@ -97,12 +116,15 @@ class RangeNetPlusPlus(BaseModel):
         Returns
         -------
         torch.Tensor
-            uint8 class-index mask of shape [1, H, W]. Each value is a
-            class index in [0, NUM_CLASSES - 1] corresponding to the
-            SemanticKITTI 20-class label set.
+            float32 logits of shape [1, NUM_CLASSES, H, W].
+            Apply argmax over dim=1 to get the predicted class index per pixel.
         """
-        logits = self.model(range_image)
-        return torch.argmax(logits, dim=1).byte()
+        # Bypass Segmentator.forward() which applies F.softmax before returning.
+        # Raw logits are required so that HTP does not fail on a quantized Softmax
+        # at the output boundary. argmax(softmax(x)) == argmax(x) so accuracy is unchanged.
+        y, skips = self.model.backbone(range_image)
+        y = self.model.decoder(y, skips)
+        return self.model.head(y)
 
     def get_input_spec(
         self,
@@ -120,7 +142,7 @@ class RangeNetPlusPlus(BaseModel):
 
     def get_output_spec(self) -> OutputSpec:
         return {
-            "mask": TensorSpec(
+            "logits": TensorSpec(
                 apply_runtime_channel_reordering=True,
             ),
         }
@@ -137,3 +159,23 @@ class RangeNetPlusPlus(BaseModel):
         ).reshape(-1, 4)
         arr, _, _ = project_points_to_range_image(points)
         return {"range_image": [arr]}
+
+    def get_evaluator(self) -> BaseEvaluator:
+        if not self.learning_map:
+            raise RuntimeError(
+                "learning_map is empty — use RangeNetPlusPlus.from_pretrained() "
+                "to create an instance with evaluation support."
+            )
+        return SemanticKittiEvaluator(
+            NUM_CLASSES,
+            self.learning_map,
+            self.learning_ignore,
+            knn_params=self.knn_params,
+        )
+
+    @classmethod
+    def get_eval_dataset_classes(cls) -> list[type[BaseDataset]]:
+        return [SemanticKittiDataset]
+
+    def get_calibration_dataset_cls(self) -> type[BaseDataset]:
+        return PandaSetDataset

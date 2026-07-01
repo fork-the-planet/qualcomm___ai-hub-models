@@ -8,3 +8,6 @@ disabled_paths:
   float:
     qnn_dlc:
       scorecard_failure: 'Failing jobs: jgd0jn0kp'
+supported_precisions:
+- float
+- w8a16

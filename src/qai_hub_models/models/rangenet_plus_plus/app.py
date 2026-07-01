@@ -185,7 +185,7 @@ class RangeNetApp:
         if raw_output:
             return mask.cpu().numpy()
 
-        pred = mask[0].cpu().numpy().clip(0, _NUM_CLASSES - 1)
+        pred = torch.argmax(mask[0], dim=0).cpu().numpy().clip(0, _NUM_CLASSES - 1)
         colored = _color_lut()[pred]
         img = Image.fromarray(colored)
         return img.resize((img.width, img.height * 8), Image.NEAREST)
@@ -225,7 +225,7 @@ class RangeNetApp:
         )
         mask = self.model(torch.from_numpy(range_image))
 
-        pred_2d = mask[0].cpu().numpy().clip(0, _NUM_CLASSES - 1)
+        pred_2d = torch.argmax(mask[0], dim=0).cpu().numpy().clip(0, _NUM_CLASSES - 1)
         point_labels = pred_2d[v_idx, u_idx]
         lut = _color_lut()
         return points[:, :3], point_labels, lut[point_labels]
@@ -322,7 +322,7 @@ class RangeNetApp:
         mask = self.model(ri_tensor)
 
         lut = _color_lut()
-        pred_2d = mask[0].cpu().numpy().clip(0, _NUM_CLASSES - 1)
+        pred_2d = torch.argmax(mask[0], dim=0).cpu().numpy().clip(0, _NUM_CLASSES - 1)
 
         # Segmentation image from the 2-D prediction grid
         seg_img = Image.fromarray(lut[pred_2d])

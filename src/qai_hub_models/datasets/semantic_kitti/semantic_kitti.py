@@ -25,7 +25,7 @@ SEMANTIC_KITTI_INSTALLATION_STEPS = [
     "Open http://www.cvlibs.net/download.php?file=data_odometry_velodyne.zip, provide your Email address, and click the request download link button",
     "Download the data_odometry_velodyne.zip file by the link sent to your email.",
     "Download the data_odometry_labels.zip file at https://semantic-kitti.org/assets/data_odometry_labels.zip",
-    "Run `python -m qai_hub_models.scripts.configure_dataset --class qai_hub_models.models.salsanext.dataset.SemanticKittiDataset --files /path/to/data_odometry_velodyne.zip /path/to/data_odometry_labels.zip`",
+    "Run `python -m qai_hub_models.scripts.configure_dataset --class qai_hub_models.datasets.semantic_kitti.semantic_kitti.SemanticKittiDataset --files /path/to/data_odometry_velodyne.zip /path/to/data_odometry_labels.zip`",
 ]
 
 SEMANTIC_KITTI_LIDARS_ASSET = CachedPrivateDatasetAsset(
@@ -46,7 +46,7 @@ SEMANTIC_KITTI_GT_ASSET = CachedPrivateDatasetAsset(
 
 # Pick a single sequence for train and validation to save disk space
 # (full dataset is 22 sequences; 80GB)
-VAL_SEQUENCE = "01"
+VAL_SEQUENCE = "08"
 TRAIN_SEQUENCE = "04"
 
 
@@ -121,7 +121,10 @@ class SemanticKittiDataset(BaseDataset):
 
     def __getitem__(
         self, index: int
-    ) -> tuple[torch.Tensor, tuple[torch.Tensor, torch.Tensor, torch.Tensor]]:
+    ) -> tuple[
+        torch.Tensor,
+        tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor],
+    ]:
         """
         Returns a tuple of input lidar proj tensor and label data.
 
@@ -134,13 +137,17 @@ class SemanticKittiDataset(BaseDataset):
         -------
         proj : torch.Tensor
             Input lidar projection tensor.
-        label_data : tuple[torch.Tensor, torch.Tensor, torch.Tensor]
+        label_data : tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]
             proj_x
                 x coordinates of lidar points with shape [max_points,].
             proj_y
                 y coordinates of lidar points with shape [max_points,].
             unproj_labels
                 Semantic labels with shape [max_points,].
+            proj_range_img
+                Projected range image of shape [H, W] (used for KNN post-processing).
+            unproj_range
+                Per-point range values of shape [max_points,] (used for KNN post-processing).
         """
         scan_file = self.scan_files[index]
         label_file = self.label_files[index]
@@ -190,10 +197,18 @@ class SemanticKittiDataset(BaseDataset):
         proj /= self.sensor_img_stds.reshape(-1, 1, 1)
         proj *= proj_mask.float()
 
+        unproj_range = torch.full([self.max_points], -1.0, dtype=torch.float32)
+        depth = torch.linalg.norm(
+            torch.from_numpy(points[:unproj_n_points]).float(), dim=1
+        )
+        unproj_range[:unproj_n_points] = depth
+
         return proj, (
             proj_x,
             proj_y,
             unproj_labels,
+            proj_range,
+            unproj_range,
         )
 
     def __len__(self) -> int:
@@ -324,5 +339,5 @@ class SemanticKittiDataset(BaseDataset):
     def get_dataset_metadata() -> DatasetMetadata:
         return DatasetMetadata(
             link="https://semantic-kitti.org/",
-            split_description="sequence #01 of 22",
+            split_description="sequence #08 of 22",
         )
