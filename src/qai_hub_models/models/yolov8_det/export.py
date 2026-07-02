@@ -74,7 +74,7 @@ def main(args: argparse.Namespace | None = None) -> None:
         )
         args = build_parser().parse_args()
     warnings.filterwarnings("ignore")
-    export_model(**vars(args))
+    export_model(MODEL_ID, **vars(args))
 
 
 if __name__ == "__main__":
