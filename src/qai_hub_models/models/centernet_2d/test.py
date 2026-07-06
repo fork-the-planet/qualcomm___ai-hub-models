@@ -6,6 +6,7 @@
 import numpy as np
 import pytest
 
+from qai_hub_models.models._shared.centernet.test_utils import assert_detections_close
 from qai_hub_models.models.centernet_2d.app import CenterNet2DApp
 from qai_hub_models.models.centernet_2d.demo import main as demo_main
 from qai_hub_models.models.centernet_2d.model import (
@@ -22,6 +23,12 @@ from qai_hub_models.utils.asset_loaders import (
 
 OUTPUT = CachedWebModelAsset.from_asset_store(MODEL_ID, MODEL_ASSET_VERSION, "dets.npy")
 
+# ctdet_decode emits rows of [bbox(0:4), score, class]; the score is column 4.
+SCORE_INDEX = 4
+# All columns are anchored to heatmap peaks (bbox via wh, score, class), so
+# they all stay within tolerance across environments.
+STABLE_COLUMNS = [0, 1, 2, 3, 4, 5]
+
 
 def test_task() -> None:
     model = CenterNet2D.from_pretrained()
@@ -33,7 +40,12 @@ def test_task() -> None:
     )
     expected = load_numpy(OUTPUT.fetch())
 
-    np.testing.assert_allclose(np.array(dets), expected, rtol=1e-05, atol=1e-05)
+    assert_detections_close(
+        np.array(dets),
+        expected,
+        score_index=SCORE_INDEX,
+        stable_columns=STABLE_COLUMNS,
+    )
 
 
 @pytest.mark.trace
@@ -50,7 +62,12 @@ def test_trace() -> None:
     )
     expected = load_numpy(OUTPUT.fetch())
 
-    np.testing.assert_allclose(np.array(dets), expected, rtol=1e-05, atol=1e-05)
+    assert_detections_close(
+        np.array(dets),
+        expected,
+        score_index=SCORE_INDEX,
+        stable_columns=STABLE_COLUMNS,
+    )
 
 
 def test_demo() -> None:
