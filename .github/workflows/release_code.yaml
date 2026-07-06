@@ -47,6 +47,11 @@ jobs:
           # Prevent checkout from configuring its own credential helper,
           # which would override PROD_GH_TOKEN with GITHUB_TOKEN.
           persist-credentials: false
+          # Fetch full history so pushing the tag sends every object it
+          # references to the public repo. A shallow checkout (the default)
+          # only has the tag commit, causing "did not receive expected
+          # object" / "remote unpack failed" on push.
+          fetch-depth: 0
 
       - name: Push tag to public repository
         env:
