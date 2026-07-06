@@ -98,6 +98,8 @@ Use alongside `error-patterns.md` and `runtime-guide.md` for triage.
 | `bevfusion_det` (decoder) | Samsung Galaxy S25 | `qnn_context_binary`, `precompiled_qnn_onnx` | 15x regression on S25 only (QAIRT 2.47 suspected). Tracked in tetracode#19932, #19807. Sustained across Jun 12 + Jun 18 dev scorecards. |
 | `esrgan` | Samsung Galaxy S25 | `qnn_dlc` | Reports `-inf` timing on S25. Part of broader S25/qnn_dlc cluster. Tracked in tetracode#19051, #19917. Sustained across Jun 12 + Jun 18. |
 | `vit` | Samsung Galaxy S25 | `qnn_dlc` | Reports `-inf` timing (w8a8). QAIRT 2.47 regression suspected. Tracked in tetracode#19775. Sustained across Jun 12 + Jun 18. |
+| `maskrcnn` (roi_head) | Samsung Galaxy S25 | `qnn_dlc` | 2x+ slowdown or `-inf` on S25. Appeared in Jun 25 dev + Jun 29 prod + Jul 2 dev scorecards. Tracked jointly with S25/QAIRT cluster. |
+| `yolor` | Samsung Galaxy S25 | `qnn_dlc`, `onnx` | `-inf` or 12x slowdown on S25. Appeared Jun 25 dev + Jun 29 prod scorecards. Part of broader S25/QAIRT 2.47 cluster. |
 
 ---
 

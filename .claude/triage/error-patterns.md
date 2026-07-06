@@ -107,6 +107,7 @@ lowers confidence on bisected suspects when the out-of-band signals are present.
 
 | Error Signature | Label | Notes |
 |----------------|-------|-------|
+| `KeyError: 'Authorization'` in `torch/hub.py` `_validate_not_a_forked_repo` | Sporadic | Upstream PyTorch bug (pytorch/pytorch#131400). Triggered when `GITHUB_TOKEN` presence/absence shifts between CI runs. Only affects models using `torch.hub.load()` (e.g., `unet_segmentation`). Re-run first; if persistent, replace `torch.hub.load` with source-as-root. |
 | `images.cocodataset.org` connection timeout/reset | Sporadic | External dataset host. Resolves within hours. Re-run. |
 | Imagenet download SSL error or timeout | Sporadic | External dataset. SSL cert rotation or network blip. |
 | HuggingFace `HTTPError 429` or connection timeout | Sporadic | Rate limited or HF outage. Re-run after 30 min. |
