@@ -192,6 +192,7 @@ class ScorecardDevice:
         WINDOWS = "Windows"
         LINUX = "Linux"
         QC_LINUX = "Qualcomm Linux"
+        UBUNTU = "Ubuntu"
 
     class OperatingSystem(BaseQAIHMConfig):
         ostype: ScorecardDevice.OperatingSystemType

@@ -428,16 +428,14 @@ devices:
     icon: IoT_Drone
     npu_count: 2
     enabled_in_scorecard: true
-  Dragonwing IQ-8275 EVK:
+  Arduino VENTUNO Q:
     chipset: qualcomm-qcs8275
-    reference_chipset: qualcomm-sa7255p
     os:
-      ostype: Linux
-      version: Ubuntu 24.04
+      ostype: Ubuntu
+      version: '24.04'
     form_factor: IoT
     vendor: qualcomm
-    icon: IoT_Chip
-    available_in_workbench: false
+    icon: IoT_Drone
   SA8255P ADP:
     chipset: qualcomm-sa8255p
     reference_chipset: qualcomm-sa8775p
@@ -801,12 +799,14 @@ chipsets:
   qualcomm-qcs8275:
     aliases:
     - qualcomm-qcs8275
+    - qcs8275
+    - qualcomm-dragonwing-iq-8275
     marketing_name: Qualcomm® QCS8275
     world: IoT
     supports_fp16: true
     htp_version: 75
-    soc_model: 67
-    reference_device: Dragonwing IQ-8275 EVK
+    soc_model: 82
+    reference_device: Arduino VENTUNO Q
     supports_weight_sharing: true
   qualcomm-sa8255p:
     aliases:

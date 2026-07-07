@@ -36,7 +36,6 @@ supported_devices:
 - Dragonwing Q-6690 MTP
 - Dragonwing IQ-9075 EVK
 - SA7255P ADP
-- Dragonwing IQ-8275 EVK
 - SA8295P ADP
 - Snapdragon 7 Gen 4 QRD
 - Dragonwing Q-7790
@@ -51,7 +50,6 @@ supported_chipsets:
 - qualcomm-snapdragon-888
 - qualcomm-snapdragon-x-plus-8-core
 - qualcomm-qcs6490
-- qualcomm-qcs8275
 - qualcomm-qcs8550-proxy
 - qualcomm-sa8775p
 - qualcomm-sa8650p
@@ -330,20 +328,6 @@ precisions:
               estimated_peak_memory_range_mb:
                 min: 1
                 max: 6
-              primary_compute_unit: NPU
-              layer_counts:
-                total: 1516
-                npu: 1516
-              tool_versions:
-                qairt: 2.45.0.260326154327
-          Dragonwing IQ-8275 EVK:
-            qnn_context_binary:
-              job_id: jpe2wom7p
-              job_status: Passed
-              inference_time_milliseconds: 94.634
-              estimated_peak_memory_range_mb:
-                min: 1
-                max: 10
               primary_compute_unit: NPU
               layer_counts:
                 total: 1516
@@ -789,20 +773,6 @@ precisions:
                 qairt: 2.45.0.260326154327
                 onnx_runtime: 1.25.0
           SA7255P ADP:
-            qnn_context_binary:
-              job_id: j5qwnnno5
-              job_status: Passed
-              inference_time_milliseconds: 77.1
-              estimated_peak_memory_range_mb:
-                min: 0
-                max: 9
-              primary_compute_unit: NPU
-              layer_counts:
-                total: 1347
-                npu: 1347
-              tool_versions:
-                qairt: 2.45.0.260326154327
-          Dragonwing IQ-8275 EVK:
             qnn_context_binary:
               job_id: j5qwnnno5
               job_status: Passed

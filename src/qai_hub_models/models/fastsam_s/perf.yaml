@@ -34,7 +34,6 @@ supported_devices:
 - SA8650P ADP
 - Dragonwing IQ-9075 EVK
 - SA7255P ADP
-- Dragonwing IQ-8275 EVK
 - SA8295P ADP
 supported_chipsets:
 - qualcomm-snapdragon-8-elite-gen5
@@ -46,7 +45,6 @@ supported_chipsets:
 - qualcomm-snapdragon-8gen1
 - qualcomm-snapdragon-888
 - qualcomm-snapdragon-x-plus-8-core
-- qualcomm-qcs8275
 - qualcomm-qcs8550-proxy
 - qualcomm-sa8775p
 - qualcomm-sa8650p
@@ -441,34 +439,6 @@ precisions:
                 cpu: 13
               tool_versions:
                 litert: 1.4.4
-          Dragonwing IQ-8275 EVK:
-            tflite:
-              job_id: jgnx41mm5
-              job_status: Passed
-              inference_time_milliseconds: 37.809
-              estimated_peak_memory_range_mb:
-                min: 4
-                max: 86
-              primary_compute_unit: NPU
-              layer_counts:
-                total: 291
-                npu: 291
-              tool_versions:
-                qairt: 2.45.0.260326154327
-                litert: 1.4.4
-            qnn_dlc:
-              job_id: j5m4793w5
-              job_status: Passed
-              inference_time_milliseconds: 39.211
-              estimated_peak_memory_range_mb:
-                min: 1
-                max: 187
-              primary_compute_unit: NPU
-              layer_counts:
-                total: 288
-                npu: 288
-              tool_versions:
-                qairt: 2.45.0.260326154327
           SA8255P ADP:
             tflite:
               job_id: jgl7dw2l5

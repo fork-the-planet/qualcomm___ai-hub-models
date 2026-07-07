@@ -36,7 +36,6 @@ supported_devices:
 - Dragonwing Q-6690 MTP
 - Dragonwing IQ-9075 EVK
 - SA7255P ADP
-- Dragonwing IQ-8275 EVK
 - SA8295P ADP
 - Snapdragon 7 Gen 4 QRD
 - Dragonwing Q-7790
@@ -51,7 +50,6 @@ supported_chipsets:
 - qualcomm-snapdragon-888
 - qualcomm-snapdragon-x-plus-8-core
 - qualcomm-qcs6490
-- qualcomm-qcs8275
 - qualcomm-qcs8550-proxy
 - qualcomm-sa8775p
 - qualcomm-sa8650p
@@ -568,34 +566,6 @@ precisions:
               estimated_peak_memory_range_mb:
                 min: 0
                 max: 56
-              primary_compute_unit: NPU
-              layer_counts:
-                total: 127
-                npu: 127
-              tool_versions:
-                qairt: 2.45.0.260326154327
-          Dragonwing IQ-8275 EVK:
-            tflite:
-              job_id: jgomjmyd5
-              job_status: Passed
-              inference_time_milliseconds: 3.728
-              estimated_peak_memory_range_mb:
-                min: 0
-                max: 52
-              primary_compute_unit: NPU
-              layer_counts:
-                total: 82
-                npu: 82
-              tool_versions:
-                qairt: 2.45.0.260326154327
-                litert: 1.4.4
-            qnn_dlc:
-              job_id: jp13r3ll5
-              job_status: Passed
-              inference_time_milliseconds: 4.034
-              estimated_peak_memory_range_mb:
-                min: 0
-                max: 55
               primary_compute_unit: NPU
               layer_counts:
                 total: 127
@@ -1166,34 +1136,6 @@ precisions:
                 gpu: 79
               tool_versions:
                 litert: 1.4.4
-          Dragonwing IQ-8275 EVK:
-            tflite:
-              job_id: jgd0j0ylp
-              job_status: Passed
-              inference_time_milliseconds: 23.802
-              estimated_peak_memory_range_mb:
-                min: 0
-                max: 100
-              primary_compute_unit: NPU
-              layer_counts:
-                total: 79
-                npu: 79
-              tool_versions:
-                qairt: 2.45.0.260326154327
-                litert: 1.4.4
-            qnn_dlc:
-              job_id: jp13r39l5
-              job_status: Passed
-              inference_time_milliseconds: 24.489
-              estimated_peak_memory_range_mb:
-                min: 1
-                max: 174
-              primary_compute_unit: NPU
-              layer_counts:
-                total: 126
-                npu: 126
-              tool_versions:
-                qairt: 2.45.0.260326154327
           SA8255P ADP:
             tflite:
               job_id: j5m4j47q5

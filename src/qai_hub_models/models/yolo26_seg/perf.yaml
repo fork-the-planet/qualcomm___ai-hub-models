@@ -36,7 +36,6 @@ supported_devices:
 - Dragonwing Q-6690 MTP
 - Dragonwing IQ-9075 EVK
 - SA7255P ADP
-- Dragonwing IQ-8275 EVK
 - SA8295P ADP
 - Snapdragon 7 Gen 4 QRD
 - Dragonwing Q-7790
@@ -51,7 +50,6 @@ supported_chipsets:
 - qualcomm-snapdragon-888
 - qualcomm-snapdragon-x-plus-8-core
 - qualcomm-qcs6490
-- qualcomm-qcs8275
 - qualcomm-qcs8550-proxy
 - qualcomm-sa8775p
 - qualcomm-sa8650p
@@ -366,20 +364,6 @@ precisions:
               tool_versions:
                 qairt: 2.45.0.260326154327
                 onnx_runtime: 1.25.0
-          Dragonwing IQ-8275 EVK:
-            qnn_dlc:
-              job_id: j5wxjmyzp
-              job_status: Passed
-              inference_time_milliseconds: 9.497
-              estimated_peak_memory_range_mb:
-                min: 2
-                max: 187
-              primary_compute_unit: NPU
-              layer_counts:
-                total: 453
-                npu: 453
-              tool_versions:
-                qairt: 2.45.0.260326154327
           Dragonwing Q-7790:
             qnn_dlc:
               job_id: jgl7jewe5
@@ -862,34 +846,6 @@ precisions:
                 cpu: 16
               tool_versions:
                 litert: 1.4.4
-          Dragonwing IQ-8275 EVK:
-            tflite:
-              job_id: jgnxjr4m5
-              job_status: Passed
-              inference_time_milliseconds: 17.289
-              estimated_peak_memory_range_mb:
-                min: 4
-                max: 165
-              primary_compute_unit: NPU
-              layer_counts:
-                total: 452
-                npu: 452
-              tool_versions:
-                qairt: 2.45.0.260326154327
-                litert: 1.4.4
-            qnn_dlc:
-              job_id: jpv4jzjmp
-              job_status: Passed
-              inference_time_milliseconds: 16.708
-              estimated_peak_memory_range_mb:
-                min: 1
-                max: 158
-              primary_compute_unit: NPU
-              layer_counts:
-                total: 453
-                npu: 453
-              tool_versions:
-                qairt: 2.45.0.260326154327
           SA8255P ADP:
             tflite:
               job_id: jpyn9vl4g

@@ -250,7 +250,7 @@ def test_download_and_unzip_workbench_onnx_model() -> None:
             )
             self.local_file = local_file
 
-        def download(self, filename: str) -> str:
+        def download(self, filename: str, timeout: int | None = None) -> str:
             dst = os.path.join(filename, os.path.basename(self.local_file))
             shutil.copyfile(self.local_file, dst)
             return dst

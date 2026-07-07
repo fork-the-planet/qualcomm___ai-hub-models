@@ -36,7 +36,7 @@ RESTRICTED_MODEL = "yolov8_det"
 
 @patch(
     "qai_hub_models.scripts.build_release_proto._similar_chipsets",
-    return_value=frozenset({"qualcomm-sa8255p", "qualcomm-qcs8275"}),
+    return_value=frozenset({"qualcomm-sa8255p", "qualcomm-sa8650p"}),
 )
 def test_manifest_drops_similar_chipsets(mock_similar: MagicMock) -> None:
     """Similar-device chipsets are dropped from a model's supported_chipsets."""
@@ -45,7 +45,7 @@ def test_manifest_drops_similar_chipsets(mock_similar: MagicMock) -> None:
     perf.supported_chipsets = [
         "qualcomm-snapdragon-8-gen-3",  # workbench: kept
         "qualcomm-sa8255p",  # similar: dropped
-        "qualcomm-qcs8275",  # similar: dropped
+        "qualcomm-sa8650p",  # similar: dropped
     ]
 
     prec_details = MagicMock()

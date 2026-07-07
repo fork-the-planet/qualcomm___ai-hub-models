@@ -140,8 +140,8 @@ def test_platform_to_proto_excludes_similar_devices() -> None:
     proto_devices = {d.name for d in proto.devices}
     assert not (proto_devices & excluded)
     assert proto_devices >= ALLOWED_SIMILAR_DEVICES
-    # qualcomm-qcs8275 (the allowlisted device's chipset) survives; a purely
-    # similar chipset (e.g. qualcomm-sa8255p) is pruned.
+    # A purely similar chipset (e.g. qualcomm-sa8255p) is pruned, while a real
+    # (measured) device's chipset (e.g. qualcomm-qcs8275) survives.
     proto_chipsets = {c.name for c in proto.chipsets}
     assert "qualcomm-qcs8275" in proto_chipsets
     assert "qualcomm-sa8255p" not in proto_chipsets
@@ -215,8 +215,8 @@ def test_apply_similar_devices_adds_real_chipset() -> None:
 
     perf.apply_similar_devices(mapping)
 
-    # IQ-8275 EVK mirrors SA7255P ADP, which inception_v3 has perf on.
-    assert "qualcomm-qcs8275" in perf.supported_chipsets
+    # SA8255P ADP mirrors SA8775P ADP, which inception_v3 has perf on.
+    assert "qualcomm-sa8255p" in perf.supported_chipsets
 
     # Idempotent for the chipset list as well.
     chips_after = list(perf.supported_chipsets)

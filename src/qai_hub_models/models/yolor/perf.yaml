@@ -33,7 +33,6 @@ supported_devices:
 - Dragonwing Q-6690 MTP
 - Dragonwing IQ-9075 EVK
 - SA7255P ADP
-- Dragonwing IQ-8275 EVK
 - SA8295P ADP
 - Snapdragon 7 Gen 4 QRD
 - Dragonwing Q-7790
@@ -48,7 +47,6 @@ supported_chipsets:
 - qualcomm-snapdragon-888
 - qualcomm-snapdragon-x-plus-8-core
 - qualcomm-qcs6490
-- qualcomm-qcs8275
 - qualcomm-qcs8550-proxy
 - qualcomm-qcs8450
 - qualcomm-qcm6690
@@ -356,20 +354,6 @@ precisions:
               layer_counts:
                 total: 604
                 npu: 604
-              tool_versions:
-                qairt: 2.45.0.260326154327
-          Dragonwing IQ-8275 EVK:
-            qnn_dlc:
-              job_id: jp0kneo25
-              job_status: Passed
-              inference_time_milliseconds: 39.545
-              estimated_peak_memory_range_mb:
-                min: 1
-                max: 293
-              primary_compute_unit: NPU
-              layer_counts:
-                total: 605
-                npu: 605
               tool_versions:
                 qairt: 2.45.0.260326154327
           Dragonwing Q-7790:

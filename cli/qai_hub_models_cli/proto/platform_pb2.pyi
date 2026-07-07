@@ -68,6 +68,7 @@ class _OperatingSystemTypeEnumTypeWrapper(google.protobuf.internal.enum_type_wra
     OPERATING_SYSTEM_TYPE_WINDOWS: _OperatingSystemType.ValueType  # 2
     OPERATING_SYSTEM_TYPE_LINUX: _OperatingSystemType.ValueType  # 3
     OPERATING_SYSTEM_TYPE_QC_LINUX: _OperatingSystemType.ValueType  # 4
+    OPERATING_SYSTEM_TYPE_UBUNTU: _OperatingSystemType.ValueType  # 5
 
 class OperatingSystemType(_OperatingSystemType, metaclass=_OperatingSystemTypeEnumTypeWrapper): ...
 
@@ -76,6 +77,7 @@ OPERATING_SYSTEM_TYPE_ANDROID: OperatingSystemType.ValueType  # 1
 OPERATING_SYSTEM_TYPE_WINDOWS: OperatingSystemType.ValueType  # 2
 OPERATING_SYSTEM_TYPE_LINUX: OperatingSystemType.ValueType  # 3
 OPERATING_SYSTEM_TYPE_QC_LINUX: OperatingSystemType.ValueType  # 4
+OPERATING_SYSTEM_TYPE_UBUNTU: OperatingSystemType.ValueType  # 5
 global___OperatingSystemType = OperatingSystemType
 
 class _WebsiteWorld:

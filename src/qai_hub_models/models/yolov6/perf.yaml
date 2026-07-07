@@ -34,7 +34,6 @@ supported_devices:
 - SA8650P ADP
 - Dragonwing IQ-9075 EVK
 - SA7255P ADP
-- Dragonwing IQ-8275 EVK
 - SA8295P ADP
 supported_chipsets:
 - qualcomm-snapdragon-8-elite-gen5
@@ -46,7 +45,6 @@ supported_chipsets:
 - qualcomm-snapdragon-8gen1
 - qualcomm-snapdragon-888
 - qualcomm-snapdragon-x-plus-8-core
-- qualcomm-qcs8275
 - qualcomm-qcs8550-proxy
 - qualcomm-sa8775p
 - qualcomm-sa8650p
@@ -441,34 +439,6 @@ precisions:
               tool_versions:
                 qairt: 2.45.0.260326154327
                 onnx_runtime: 1.25.0
-          Dragonwing IQ-8275 EVK:
-            tflite:
-              job_id: jpxmw3l8g
-              job_status: Passed
-              inference_time_milliseconds: 18.353
-              estimated_peak_memory_range_mb:
-                min: 0
-                max: 184
-              primary_compute_unit: NPU
-              layer_counts:
-                total: 309
-                npu: 309
-              tool_versions:
-                qairt: 2.45.0.260326154327
-                litert: 1.4.4
-            qnn_dlc:
-              job_id: j56vkronp
-              job_status: Passed
-              inference_time_milliseconds: 18.336
-              estimated_peak_memory_range_mb:
-                min: 0
-                max: 174
-              primary_compute_unit: NPU
-              layer_counts:
-                total: 323
-                npu: 323
-              tool_versions:
-                qairt: 2.45.0.260326154327
           SA8255P ADP:
             tflite:
               job_id: jgnxjozj5
@@ -749,20 +719,6 @@ precisions:
               estimated_peak_memory_range_mb:
                 min: 2
                 max: 91
-              primary_compute_unit: NPU
-              layer_counts:
-                total: 383
-                npu: 383
-              tool_versions:
-                qairt: 2.45.0.260326154327
-          Dragonwing IQ-8275 EVK:
-            qnn_dlc:
-              job_id: jp48zm12g
-              job_status: Passed
-              inference_time_milliseconds: 7.215
-              estimated_peak_memory_range_mb:
-                min: 0
-                max: 64
               primary_compute_unit: NPU
               layer_counts:
                 total: 383

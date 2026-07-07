@@ -32,7 +32,6 @@ supported_devices:
 - Dragonwing Q-6690 MTP
 - Dragonwing IQ-9075 EVK
 - SA7255P ADP
-- Dragonwing IQ-8275 EVK
 - Snapdragon 7 Gen 4 QRD
 - Dragonwing Q-7790
 supported_chipsets:
@@ -45,7 +44,6 @@ supported_chipsets:
 - qualcomm-snapdragon-8gen1
 - qualcomm-snapdragon-888
 - qualcomm-snapdragon-x-plus-8-core
-- qualcomm-qcs8275
 - qualcomm-qcs8550-proxy
 - qualcomm-qcm6690
 - qualcomm-qcs7181
@@ -325,20 +323,6 @@ precisions:
               tool_versions:
                 qairt: 2.45.0.260326154327
                 onnx_runtime: 1.25.0
-          Dragonwing IQ-8275 EVK:
-            qnn_context_binary:
-              job_id: jpr9rw29p
-              job_status: Passed
-              inference_time_milliseconds: 7.486
-              estimated_peak_memory_range_mb:
-                min: 0
-                max: 8
-              primary_compute_unit: NPU
-              layer_counts:
-                total: 437
-                npu: 437
-              tool_versions:
-                qairt: 2.45.0.260326154327
           Dragonwing Q-7790:
             precompiled_qnn_onnx:
               job_id: jp0kw6k95
@@ -691,20 +675,6 @@ precisions:
               tool_versions:
                 qairt: 2.45.0.260326154327
                 onnx_runtime: 1.25.0
-          Dragonwing IQ-8275 EVK:
-            qnn_context_binary:
-              job_id: jpynlmj7g
-              job_status: Passed
-              inference_time_milliseconds: 262.713
-              estimated_peak_memory_range_mb:
-                min: 0
-                max: 8
-              primary_compute_unit: NPU
-              layer_counts:
-                total: 3527
-                npu: 3527
-              tool_versions:
-                qairt: 2.45.0.260326154327
           Dragonwing Q-7790:
             precompiled_qnn_onnx:
               job_id: jp88n18kp
@@ -1057,20 +1027,6 @@ precisions:
               tool_versions:
                 qairt: 2.45.0.260326154327
                 onnx_runtime: 1.25.0
-          Dragonwing IQ-8275 EVK:
-            qnn_context_binary:
-              job_id: jp0kw6265
-              job_status: Passed
-              inference_time_milliseconds: 711.368
-              estimated_peak_memory_range_mb:
-                min: 0
-                max: 8
-              primary_compute_unit: NPU
-              layer_counts:
-                total: 171
-                npu: 171
-              tool_versions:
-                qairt: 2.45.0.260326154327
           Dragonwing Q-7790:
             precompiled_qnn_onnx:
               job_id: jgkd18dwp

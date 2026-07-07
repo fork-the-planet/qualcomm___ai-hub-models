@@ -31,7 +31,6 @@ supported_devices:
 - QCS8550 (Proxy)
 - Dragonwing IQ-9075 EVK
 - SA7255P ADP
-- Dragonwing IQ-8275 EVK
 supported_chipsets:
 - qualcomm-snapdragon-8-elite-gen5
 - qualcomm-snapdragon-8-elite
@@ -42,7 +41,6 @@ supported_chipsets:
 - qualcomm-snapdragon-8gen1
 - qualcomm-snapdragon-888
 - qualcomm-snapdragon-x-plus-8-core
-- qualcomm-qcs8275
 - qualcomm-qcs8550-proxy
 - qualcomm-qcs7181
 - qualcomm-qcs8750
@@ -159,20 +157,6 @@ precisions:
               estimated_peak_memory_range_mb:
                 min: 2
                 max: 12
-              primary_compute_unit: NPU
-              layer_counts:
-                total: 830
-                npu: 830
-              tool_versions:
-                qairt: 2.45.0.260326154327
-          Dragonwing IQ-8275 EVK:
-            voice_ai:
-              job_id: j56vxd36p
-              job_status: Passed
-              inference_time_milliseconds: 66.502
-              estimated_peak_memory_range_mb:
-                min: 2
-                max: 11
               primary_compute_unit: NPU
               layer_counts:
                 total: 830
@@ -313,20 +297,6 @@ precisions:
               job_id: jpxmqd73g
               job_status: Passed
               inference_time_milliseconds: 70.988
-              estimated_peak_memory_range_mb:
-                min: 2
-                max: 10
-              primary_compute_unit: NPU
-              layer_counts:
-                total: 763
-                npu: 763
-              tool_versions:
-                qairt: 2.45.0.260326154327
-          Dragonwing IQ-8275 EVK:
-            voice_ai:
-              job_id: jp38dw435
-              job_status: Passed
-              inference_time_milliseconds: 245.465
               estimated_peak_memory_range_mb:
                 min: 2
                 max: 10
@@ -479,20 +449,6 @@ precisions:
                 npu: 447
               tool_versions:
                 qairt: 2.45.0.260326154327
-          Dragonwing IQ-8275 EVK:
-            voice_ai:
-              job_id: jgomx41q5
-              job_status: Passed
-              inference_time_milliseconds: 134.61
-              estimated_peak_memory_range_mb:
-                min: 0
-                max: 9
-              primary_compute_unit: NPU
-              layer_counts:
-                total: 447
-                npu: 447
-              tool_versions:
-                qairt: 2.45.0.260326154327
           Dragonwing Q-8750:
             voice_ai:
               job_id: jgomx4vq5
@@ -629,20 +585,6 @@ precisions:
               estimated_peak_memory_range_mb:
                 min: 0
                 max: 9
-              primary_compute_unit: NPU
-              layer_counts:
-                total: 332
-                npu: 332
-              tool_versions:
-                qairt: 2.45.0.260326154327
-          Dragonwing IQ-8275 EVK:
-            voice_ai:
-              job_id: jpv489zkp
-              job_status: Passed
-              inference_time_milliseconds: 30.638
-              estimated_peak_memory_range_mb:
-                min: 0
-                max: 8
               primary_compute_unit: NPU
               layer_counts:
                 total: 332
