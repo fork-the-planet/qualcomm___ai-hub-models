@@ -39,7 +39,7 @@ from qai_hub_models.models.qwen3_vl_4b_instruct.model import (
 from qai_hub_models.scorecard import ScorecardDevice
 from qai_hub_models.scorecard.device import cs_8_elite_gen_5_qrd
 
-DEFAULT_EVAL_SEQLEN = 2048
+DEFAULT_EVAL_SEQLEN = [2048, 128, 1]
 
 
 @pytest.mark.evaluate
@@ -87,10 +87,10 @@ def test_evaluate(
         qnn_model_cls=LLM_QNN,  # type: ignore[type-abstract]
         num_samples=num_samples,
         dataset_cls=dataset_cls,
+        prompt_sequence_length=DEFAULT_EVAL_SEQLEN,
+        context_length=DEFAULT_CONTEXT_LENGTH,
         kwargs=dict(
             checkpoint=checkpoint,
-            sequence_length=DEFAULT_EVAL_SEQLEN,
-            context_length=DEFAULT_CONTEXT_LENGTH,
         ),
         vision_encoder_cls=VisionEncoder,
         hf_repo_name=HF_REPO_NAME,
