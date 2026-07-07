@@ -33,6 +33,7 @@ supported_devices:
 - Dragonwing Q-6690 MTP
 - Dragonwing IQ-9075 EVK
 - SA7255P ADP
+- Dragonwing IQ-8275 EVK
 - SA8295P ADP
 - Snapdragon 7 Gen 4 QRD
 - Dragonwing Q-7790
@@ -47,6 +48,7 @@ supported_chipsets:
 - qualcomm-snapdragon-888
 - qualcomm-snapdragon-x-plus-8-core
 - qualcomm-qcs6490
+- qualcomm-qcs8275
 - qualcomm-qcs8550-proxy
 - qualcomm-qcs8450
 - qualcomm-qcm6690
@@ -552,6 +554,34 @@ precisions:
               estimated_peak_memory_range_mb:
                 min: 1
                 max: 280
+              primary_compute_unit: NPU
+              layer_counts:
+                total: 300
+                npu: 300
+              tool_versions:
+                qairt: 2.45.0.260326154327
+          Dragonwing IQ-8275 EVK:
+            tflite:
+              job_id: jgkdj7dyp
+              job_status: Passed
+              inference_time_milliseconds: 13.742
+              estimated_peak_memory_range_mb:
+                min: 5
+                max: 260
+              primary_compute_unit: NPU
+              layer_counts:
+                total: 305
+                npu: 305
+              tool_versions:
+                qairt: 2.45.0.260326154327
+                litert: 1.4.4
+            qnn_dlc:
+              job_id: jgl7j6xl5
+              job_status: Passed
+              inference_time_milliseconds: 20.181
+              estimated_peak_memory_range_mb:
+                min: 3
+                max: 260
               primary_compute_unit: NPU
               layer_counts:
                 total: 300
@@ -1220,6 +1250,35 @@ precisions:
                 npu: 270
               tool_versions:
                 qairt: 2.45.0.260326154327
+          Dragonwing IQ-8275 EVK:
+            tflite:
+              job_id: j5qwjew75
+              job_status: Passed
+              inference_time_milliseconds: 17.78
+              estimated_peak_memory_range_mb:
+                min: 1
+                max: 227
+              primary_compute_unit: NPU
+              layer_counts:
+                total: 488
+                npu: 485
+                cpu: 3
+              tool_versions:
+                qairt: 2.45.0.260326154327
+                litert: 1.4.4
+            qnn_dlc:
+              job_id: jgomjkrd5
+              job_status: Passed
+              inference_time_milliseconds: 11.379
+              estimated_peak_memory_range_mb:
+                min: 2
+                max: 167
+              primary_compute_unit: NPU
+              layer_counts:
+                total: 270
+                npu: 270
+              tool_versions:
+                qairt: 2.45.0.260326154327
           Dragonwing Q-7790:
             qnn_dlc:
               job_id: jgomjk845
@@ -1876,6 +1935,34 @@ precisions:
                 npu: 852
               tool_versions:
                 qairt: 2.45.0.260326154327
+          Dragonwing IQ-8275 EVK:
+            tflite:
+              job_id: jgl7j67e5
+              job_status: Passed
+              inference_time_milliseconds: 15.417
+              estimated_peak_memory_range_mb:
+                min: 0
+                max: 215
+              primary_compute_unit: NPU
+              layer_counts:
+                total: 816
+                npu: 816
+              tool_versions:
+                qairt: 2.45.0.260326154327
+                litert: 1.4.4
+            qnn_dlc:
+              job_id: jpv4j0dmp
+              job_status: Passed
+              inference_time_milliseconds: 5.536
+              estimated_peak_memory_range_mb:
+                min: 4
+                max: 92
+              primary_compute_unit: NPU
+              layer_counts:
+                total: 852
+                npu: 852
+              tool_versions:
+                qairt: 2.45.0.260326154327
           Dragonwing Q-7790:
             qnn_dlc:
               job_id: jpv4j077p
@@ -2400,6 +2487,34 @@ precisions:
               tool_versions:
                 qairt: 2.45.0.260326154327
                 onnx_runtime: 1.25.0
+          Dragonwing IQ-8275 EVK:
+            tflite:
+              job_id: jpr9z8v7p
+              job_status: Passed
+              inference_time_milliseconds: 68.799
+              estimated_peak_memory_range_mb:
+                min: 20
+                max: 287
+              primary_compute_unit: NPU
+              layer_counts:
+                total: 291
+                npu: 291
+              tool_versions:
+                qairt: 2.45.0.260326154327
+                litert: 1.4.4
+            qnn_dlc:
+              job_id: j5m4jq675
+              job_status: Passed
+              inference_time_milliseconds: 68.796
+              estimated_peak_memory_range_mb:
+                min: 0
+                max: 259
+              primary_compute_unit: NPU
+              layer_counts:
+                total: 300
+                npu: 300
+              tool_versions:
+                qairt: 2.45.0.260326154327
           Dragonwing Q-8750:
             qnn_dlc:
               job_id: jp88l00op
@@ -2878,6 +2993,34 @@ precisions:
               tool_versions:
                 qairt: 2.45.0.260326154327
                 onnx_runtime: 1.25.0
+          Dragonwing IQ-8275 EVK:
+            tflite:
+              job_id: jpyn9r1lg
+              job_status: Passed
+              inference_time_milliseconds: 53.142
+              estimated_peak_memory_range_mb:
+                min: 0
+                max: 315
+              primary_compute_unit: NPU
+              layer_counts:
+                total: 435
+                npu: 435
+              tool_versions:
+                qairt: 2.45.0.260326154327
+                litert: 1.4.4
+            qnn_dlc:
+              job_id: jgnxjlmj5
+              job_status: Passed
+              inference_time_milliseconds: 44.867
+              estimated_peak_memory_range_mb:
+                min: 2
+                max: 317
+              primary_compute_unit: NPU
+              layer_counts:
+                total: 301
+                npu: 301
+              tool_versions:
+                qairt: 2.45.0.260326154327
           Dragonwing Q-8750:
             qnn_dlc:
               job_id: jgkdj77np
@@ -3356,6 +3499,34 @@ precisions:
               tool_versions:
                 qairt: 2.45.0.260326154327
                 onnx_runtime: 1.25.0
+          Dragonwing IQ-8275 EVK:
+            tflite:
+              job_id: jp88l0qop
+              job_status: Passed
+              inference_time_milliseconds: 13.387
+              estimated_peak_memory_range_mb:
+                min: 0
+                max: 215
+              primary_compute_unit: NPU
+              layer_counts:
+                total: 895
+                npu: 895
+              tool_versions:
+                qairt: 2.45.0.260326154327
+                litert: 1.4.4
+            qnn_dlc:
+              job_id: jpr9z82kp
+              job_status: Passed
+              inference_time_milliseconds: 13.509
+              estimated_peak_memory_range_mb:
+                min: 16
+                max: 238
+              primary_compute_unit: NPU
+              layer_counts:
+                total: 863
+                npu: 863
+              tool_versions:
+                qairt: 2.45.0.260326154327
           Dragonwing Q-8750:
             qnn_dlc:
               job_id: j5qwjeeo5

@@ -222,7 +222,16 @@ class DeviceDetailsYaml(BaseQAIHMConfig):
 
 # By default, similar devices are stripped from the platform protobuf that we publish with releases.
 # This is an exception list. (Similar devices in this list are not stripped.)
-ALLOWED_SIMILAR_DEVICES: frozenset[str] = frozenset()
+ALLOWED_SIMILAR_DEVICES = frozenset(
+    {
+        "Dragonwing IQ-8275 EVK"  # We hardcoded release assets for this, so it needs to be a valid device in the CLI.
+    }
+)
+
+
+# These devices are not generally available in AIHW (similar devices are still
+# allowed)
+EARLY_ACCESS_HUB_DEVICES: frozenset[str] = frozenset({"Arduino VENTUNO Q"})
 
 
 @cache
@@ -399,6 +408,10 @@ class DevicesAndChipsetsYaml(BaseQAIHMConfig):
         for hub_device in hub.get_devices():
             if "(Family)" in hub_device.name:
                 # Exclude "Family" devices
+                continue
+            if hub_device.name in EARLY_ACCESS_HUB_DEVICES:
+                # Skip early-access devices so similar_devices.yaml can still
+                # represent them for public users.
                 continue
             if hub_device.name in out.devices:
                 # Exclude multiple devices with the same name
