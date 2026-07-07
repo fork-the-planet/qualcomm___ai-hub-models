@@ -19,25 +19,19 @@ from __future__ import annotations
 import copy
 import json
 import logging
-import math
 import os
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-import numpy as np
 import onnx
 import torch
-from torch.utils.data import DataLoader
-from tqdm import tqdm
 from transformers import AutoProcessor, PretrainedConfig, PreTrainedTokenizer
 from transformers.models.qwen2_5_vl import modeling_qwen2_5_vl
 
 from qai_hub_models.models._shared.llm.common import LLMIOType
 from qai_hub_models.models._shared.llm.model import (
-    DEFAULT_CALIBRATION_SEQ_LEN,
     DEFAULT_CONTEXT_LENGTH,
     DEFAULT_SEQUENCE_LENGTH,
-    LLMDynamic_AIMETOnnx,
 )
 from qai_hub_models.models._shared.qwen2.model import (
     Qwen2Base,
@@ -45,7 +39,9 @@ from qai_hub_models.models._shared.qwen2.model import (
     Qwen2Base_QNN,
     QwenPositionProcessor,
 )
-from qai_hub_models.utils.base_dataset import DatasetSplit
+from qai_hub_models.models._shared.vlm.model import (
+    VLMDynamic_AIMETOnnx,
+)
 from qai_hub_models.utils.input_spec import TensorSpec
 from qai_hub_models.utils.onnx.helpers import ONNXBundle
 
@@ -55,14 +51,12 @@ if TYPE_CHECKING:
     from qai_hub_models.utils.base_dataset import BaseDataset
     from qai_hub_models.utils.input_spec import InputSpec
 
-from qai_hub.public_rest_api import DatasetEntries
 
 from qai_hub_models import Precision
 from qai_hub_models.models._shared.llm._utils import (
     _apply_int8_kv_cache_tying_and_lm_head,
     _get_kv_io_map,
 )
-from qai_hub_models.utils.qai_hub_helpers import make_hub_dataset_entries
 from qai_hub_models.utils.system_info import has_recommended_memory
 
 logger = logging.getLogger(__name__)
@@ -308,7 +302,6 @@ class Qwen2VLTextBase(Qwen2Base):
         self.tokenizer = get_tokenizer(checkpoint)
 
         # Cache HF image processor config for vision preprocessing metadata
-        from transformers import AutoProcessor
 
         self._image_processor = AutoProcessor.from_pretrained(
             checkpoint
@@ -773,30 +766,6 @@ class Qwen2VLTextBase_AIMETOnnx(Qwen2Base_AIMETOnnx):
             quant_sim, kv_io_map, use_16x8_matmuls=False
         )
 
-    def _load_calibration_vision_model(self) -> torch.nn.Module | None:
-        """Load the HF vision model for multimodal calibration samples."""
-        try:
-            from transformers import AutoModel
-
-            hf_repo = getattr(self, "_hf_repo_name", None)
-            if hf_repo is None and self.checkpoint is not None:
-                hf_repo = self.checkpoint
-            if hf_repo is None:
-                hf_repo = self.llm_config._name_or_path
-
-            hf_model = AutoModel.from_pretrained(hf_repo, trust_remote_code=True)
-            visual = hf_model.visual.eval()
-            # Detach from parent to free LLM weights
-            del hf_model
-            return visual
-        except Exception:
-            logger.warning(
-                "Failed to load vision model for calibration; "
-                "multimodal samples will use text-only prefill.",
-                exc_info=True,
-            )
-            return None
-
     def _merge_vision_embeddings(
         self,
         input_ids: torch.Tensor,
@@ -880,149 +849,10 @@ class Qwen2VLTextBase_AIMETOnnx(Qwen2Base_AIMETOnnx):
         return bundle
 
 
-class Qwen2VLDynamic_AIMETOnnx(LLMDynamic_AIMETOnnx, Qwen2VLTextBase_AIMETOnnx):
+class Qwen2VLDynamic_AIMETOnnx(VLMDynamic_AIMETOnnx, Qwen2VLTextBase_AIMETOnnx):
     """Dynamic-shape variant of Qwen2VLTextBase_AIMETOnnx."""
 
     FPModel = Qwen2VLTextBase
-
-    def _prefill_dataset(
-        self,
-        dataloader: torch.utils.data.DataLoader,
-        num_inputs: int,
-        seq_len: int,
-        use_vision: bool = False,
-        desc: str = "Pre-filling data",
-    ) -> list[list[torch.Tensor | np.ndarray]]:
-        """Shared prefill loop for calibration and weight optimization."""
-        from qai_hub_models.models._shared.llm.generator_factory import make_generator
-
-        inputs: list[list[torch.Tensor | np.ndarray]] = [[] for _ in range(num_inputs)]
-
-        vision_model = self._load_calibration_vision_model() if use_vision else None
-
-        generator = make_generator(
-            self,
-            sequence_length=seq_len,
-            vision_model=vision_model,
-            model_cls=self.FPModel,
-        )
-
-        device = generator.device
-        with self.remove_quantization(), torch.no_grad():
-            for sample in tqdm(dataloader, total=len(dataloader), desc=desc):
-                input_ids, attention_mask, *rest = sample
-                prefill_kwargs: dict[str, torch.Tensor | None] = dict(
-                    input_ids=input_ids.to(device),
-                    attention_mask=attention_mask.to(device),
-                )
-                if use_vision:
-                    pixel_values = rest[1] if len(rest) > 1 else None
-                    prefill_kwargs["pixel_values"] = (
-                        pixel_values.to(device) if pixel_values is not None else None
-                    )
-                    prefill_kwargs["image_grid_thw"] = (
-                        rest[2] if len(rest) > 2 else None
-                    )
-
-                for prefilled_inputs in generator.prefill(**prefill_kwargs):  # type: ignore[arg-type]
-                    for i, tensor in enumerate(prefilled_inputs.values()):
-                        inputs[i].append(tensor.cpu())
-
-        return inputs
-
-    def get_calibration_data(  # type: ignore[override]
-        self,
-        num_samples: int = 0,
-        input_spec: InputSpec | None = None,
-        sequence_length: int = DEFAULT_CALIBRATION_SEQ_LEN,
-        context_length: int = DEFAULT_CONTEXT_LENGTH,
-    ) -> DatasetEntries | None:
-        """Get interleaved (wikitext + AOKVQA) calibration data for VLM."""
-        from qai_hub_models.datasets import instantiate_dataset
-        from qai_hub_models.datasets.wikitext.interleaved_aokvqa_wikitext import (
-            InterleavedAOKVQAWikitext,
-        )
-
-        if num_samples == 0:
-            num_samples = math.ceil(80000 / context_length)
-
-        hf_repo = getattr(self, "_hf_repo_name", None)
-        if hf_repo is None and self.checkpoint is not None:
-            hf_repo = self.checkpoint
-        if hf_repo is None:
-            hf_repo = self.llm_config._name_or_path
-        processor = AutoProcessor.from_pretrained(hf_repo, trust_remote_code=True)
-
-        dataset = instantiate_dataset(
-            InterleavedAOKVQAWikitext,
-            DatasetSplit.TRAIN,
-            input_spec=None,
-            tokenizer=self.tokenizer,
-            block_size=sequence_length,
-            context_length=context_length,
-            num_samples=num_samples,
-            processor=processor,
-        )
-        dataloader = DataLoader(dataset, batch_size=1, collate_fn=dataset.collate_fn)
-
-        input_spec = self.get_input_spec(
-            llm_config=self.llm_config.to_dict(),
-            sequence_length=sequence_length,
-            context_length=context_length,
-            llm_io_type=self.llm_io_type,
-        )
-        assert input_spec is not None
-
-        inputs = self._prefill_dataset(
-            dataloader,
-            num_inputs=len(input_spec),
-            seq_len=sequence_length,
-            use_vision=True,
-            desc="Pre-filling calibration data (interleaved)",
-        )
-        return make_hub_dataset_entries(tuple(inputs), list(input_spec.keys()))
-
-    def get_weight_optimization_data(
-        self,
-        num_samples: int = 0,
-        input_spec: InputSpec | None = None,
-        sequence_length: int = DEFAULT_CALIBRATION_SEQ_LEN,
-        context_length: int = DEFAULT_CONTEXT_LENGTH,
-    ) -> DatasetEntries | None:
-        """Get plain text (WikiText) data for seqMSE/AdaScale weight optimization."""
-        from qai_hub_models.datasets import instantiate_dataset
-        from qai_hub_models.datasets.wikitext import WikiText
-
-        if num_samples == 0:
-            num_samples = math.ceil(80000 / context_length)
-
-        dataset = instantiate_dataset(
-            WikiText,
-            DatasetSplit.TRAIN,
-            input_spec=None,
-            tokenizer=self.tokenizer,
-            block_size=sequence_length,
-            context_length=context_length,
-            num_samples=num_samples,
-        )
-        dataloader = DataLoader(dataset, batch_size=1, collate_fn=dataset.collate_fn)
-
-        input_spec = self.get_input_spec(
-            llm_config=self.llm_config.to_dict(),
-            sequence_length=sequence_length,
-            context_length=context_length,
-            llm_io_type=self.llm_io_type,
-        )
-        assert input_spec is not None
-
-        inputs = self._prefill_dataset(
-            dataloader,
-            num_inputs=len(input_spec),
-            seq_len=sequence_length,
-            use_vision=False,
-            desc="Pre-filling weight optimization data (text-only)",
-        )
-        return make_hub_dataset_entries(tuple(inputs), list(input_spec.keys()))
 
 
 class Qwen2VLTextBase_QNN(Qwen2Base_QNN):

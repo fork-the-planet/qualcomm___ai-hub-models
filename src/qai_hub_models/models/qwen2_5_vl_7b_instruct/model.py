@@ -364,6 +364,7 @@ class Qwen2_5_VL_7B_QuantizablePreSplit(  # type: ignore[misc]
         sequence_length: int = DEFAULT_SEQUENCE_LENGTH,
         context_length: int = DEFAULT_CONTEXT_LENGTH,
         llm_io_type: LLMIOType = LLMIOType.genie_input_embeds,
+        image_size: tuple[int, int] | None = None,  # type: ignore[unused-ignore]  # Unused; for VLM base class compatibility
     ) -> InputSpec:
         return self.get_static_input_spec(
             llm_config, sequence_length, context_length, llm_io_type
