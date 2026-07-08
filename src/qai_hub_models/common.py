@@ -404,7 +404,7 @@ class InferenceEngine(Enum):
     @property
     def default_qairt_version(self: InferenceEngine) -> QAIRTVersion:
         """Default QAIRT version used by this inference engine."""
-        qairt_version = "2.45"
+        qairt_version = "2.47"
 
         try:
             return QAIRTVersion(qairt_version)
