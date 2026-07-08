@@ -51,7 +51,7 @@ Navigate to [docs](https://workbench.aihub.qualcomm.com/docs/) for more informat
 Run the following simple CLI demo to verify the model is working end to end:
 
 ```bash
-python -m qai_hub_models.models.cvt.demo { --quantize w8a16_mixed_fp16 }
+python -m qai_hub_models.models.cvt.demo { --quantize w8a16_mixed_int16 }
 ```
 More details on the CLI tool can be found with the `--help` option. See
 [demo.py](demo.py) for sample usage of the model including pre/post processing

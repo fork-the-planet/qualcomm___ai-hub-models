@@ -122,8 +122,7 @@ class CVT(BaseModel):
         return NuscenesBevSegmentationEvaluator()
 
     def get_hub_litemp_percentage(self, _: Precision) -> float:
-        """Returns the Lite-MP percentage value for the specified mixed precision quantization."""
-        return 4
+        return 0.33
 
     @classmethod
     def get_eval_dataset_classes(cls) -> list[type[BaseDataset]]:

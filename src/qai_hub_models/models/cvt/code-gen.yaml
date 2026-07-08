@@ -5,11 +5,7 @@ external_repos:
     patches_filename: cvt_patches.diff
 supported_precisions:
 - float
-- w8a16_mixed_fp16
+- w8a16_mixed_int16
 has_on_target_demo: true
-disabled_paths:
-  w8a16_mixed_fp16:
-    qnn_dlc:
-      scorecard_failure: 'Failing jobs: jgnx414j5'
 global_requirements_incompatible: true
 pip_pre_build_reqs: nuscenes-devkit==1.2.0 --no-deps
