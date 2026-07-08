@@ -13,7 +13,6 @@ import warnings
 from qai_hub_models import Precision, TargetRuntime
 from qai_hub_models.models.yolo_world import MODEL_ID, Model
 from qai_hub_models.utils.args import evaluate_parser
-from qai_hub_models.utils.asset_loaders import UNPUBLISHED_MODEL_WARNING, query_yes_no
 from qai_hub_models.utils.evaluate.dispatch import resolve_evaluate_model
 
 SUPPORTED_PRECISION_RUNTIMES: dict[Precision, list[TargetRuntime]] = {
@@ -60,9 +59,6 @@ def build_parser(cli_mode: bool = False) -> argparse.ArgumentParser:
 
 
 def main(args: argparse.Namespace | None = None) -> None:
-    print("WARNING:", UNPUBLISHED_MODEL_WARNING)
-    if not query_yes_no("Continue?"):
-        return
     if args is None:
         warnings.warn(
             "Running `python -m qai_hub_models.models.yolo_world.evaluate` is "

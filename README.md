@@ -285,6 +285,7 @@ and many more.
 | [RF-DETR](https://aihub.qualcomm.com/models/rf_detr) | [qai_hub_models.models.rf_detr](src/qai_hub_models/models/rf_detr/README.md) |
 | [RTMDet](https://aihub.qualcomm.com/models/rtmdet) | [qai_hub_models.models.rtmdet](src/qai_hub_models/models/rtmdet/README.md) |
 | [ResNet34-SSD](https://aihub.qualcomm.com/models/resnet34_ssd1200) | [qai_hub_models.models.resnet34_ssd1200](src/qai_hub_models/models/resnet34_ssd1200/README.md) |
+| [YOLO-WORLD](https://aihub.qualcomm.com/models/yolo_world) | [qai_hub_models.models.yolo_world](src/qai_hub_models/models/yolo_world/README.md) |
 | [YOLO26-Detection](https://aihub.qualcomm.com/models/yolo26_det) | [qai_hub_models.models.yolo26_det](src/qai_hub_models/models/yolo26_det/README.md) |
 | [YOLOv10-Detection](https://aihub.qualcomm.com/models/yolov10_det) | [qai_hub_models.models.yolov10_det](src/qai_hub_models/models/yolov10_det/README.md) |
 | [YOLOv11-Detection](https://aihub.qualcomm.com/models/yolov11_det) | [qai_hub_models.models.yolov11_det](src/qai_hub_models/models/yolov11_det/README.md) |

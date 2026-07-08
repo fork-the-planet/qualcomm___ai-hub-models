@@ -1,7 +1,6 @@
 name: YOLO-WORLD
 id: yolo_world
-status: pending
-status_reason: animated and static banner are not available
+status: published
 headline: Real-time prompt based object detection optimized for mobile and edge by Ultralytics.
 domain: Computer Vision
 description: Ultralytics YOLO-World is an open-vocabulary object detection model that uses a prompt-then-detect strategy to predict bounding boxes for user-specified classes.
@@ -20,7 +19,7 @@ form_factors:
 - Tablet
 - IoT
 - XR
-has_static_banner: false
+has_static_banner: true
 has_animated_banner: false
 dataset: ["coco"]
 technical_details:

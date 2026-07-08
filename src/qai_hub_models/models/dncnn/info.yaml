@@ -16,7 +16,7 @@ form_factors:
 - Phone
 - Tablet
 has_static_banner: true
-has_animated_banner: false
+has_animated_banner: true
 dataset:
 - BSDS300
 technical_details:

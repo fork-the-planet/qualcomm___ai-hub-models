@@ -1,6 +1,3 @@
-> [!WARNING]
-> This model is not published. Use with caution; it may not meet performance/accuracy standards and may not support some runtimes or chipsets/devices. We do not provide support for unpublished models. If this model was previously published, use earlier releases.
-
 # [YOLO-WORLD: Real-time prompt based object detection optimized for mobile and edge by Ultralytics](https://aihub.qualcomm.com/models/yolo_world)
 
 Ultralytics YOLO-World is an open-vocabulary object detection model that uses a prompt-then-detect strategy to predict bounding boxes for user-specified classes.
