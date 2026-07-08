@@ -956,6 +956,9 @@ class SplitForwardMixin:
     _parts: list | None
     _input_names_for_parts: list[list] | None
     _exporting_onnx: bool
+    # Optional GPU pin for eval: when the torch weights live on CPU (see
+    # evaluate.py) the generator reads this to place KV/compute on the GPU.
+    host_device: torch.device | None = None
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         self._parts = None

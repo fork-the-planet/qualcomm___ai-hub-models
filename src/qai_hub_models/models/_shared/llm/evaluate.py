@@ -27,6 +27,7 @@ from qai_hub_models.models._shared.llm.model import (
     LLMBase,
     LLMDynamic_AIMETOnnx,
     LLMDynamicBase,
+    SplitForwardMixin,
 )
 from qai_hub_models.utils.args import (
     add_input_spec_args,
@@ -217,6 +218,15 @@ def _evaluate_impl(
             final_kwargs.pop("sequence_length", None)
             final_kwargs.pop("context_length", None)
         model = model_cls.from_pretrained(**final_kwargs).to(host_device)
+    elif isinstance(fp_model, SplitForwardMixin) and host_device.type == "cuda":
+        # FP split eval runs through per-Part ORT CUDA sessions, so the torch
+        # weights are dead GPU residency (~16-32 GiB). Keep them on CPU (skip the
+        # GPU transfer entirely) and pin the generator to the GPU via
+        # host_device so KV/compute still run there.
+        model = fp_model.to(torch.device("cpu"))
+        model.host_device = host_device
+        gc.collect()
+        torch.cuda.empty_cache()
     else:
         model = fp_model.to(host_device)
 
