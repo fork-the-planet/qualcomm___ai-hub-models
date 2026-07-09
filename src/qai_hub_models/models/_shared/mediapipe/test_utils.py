@@ -24,10 +24,16 @@ import torch
 DEFAULT_RTOL = 1e-2
 DEFAULT_ATOL = 1.0
 
+# The landmark tensor's last column is a confidence score in [0, 1] (its last
+# dim is (x, y, confidence)). The pixel-scale tolerance above would make any
+# confidence check vacuous, so confidence gets its own tight tolerance.
+CONF_RTOL = 1e-2
+CONF_ATOL = 1e-2
 
-def _first_detection(batched: Any) -> np.ndarray:
-    # The mediapipe apps run on a single image and return one selected detection
-    # per output list. Pull that detection out as a numpy array.
+
+def _only_image_tensor(batched: Any) -> np.ndarray:
+    # Apps run on a single image, so each output list has one element: the
+    # tensor of all detections for that image (leading dim = num detections).
     assert len(batched) >= 1, "Expected at least one batch element."
     tensor = batched[0]
     assert isinstance(tensor, torch.Tensor), "Expected a detection tensor."
@@ -44,8 +50,12 @@ def landmarks_from_raw_output(raw_output: Sequence[Any]) -> dict[str, np.ndarray
     We compare the selected box and the selected landmarks, which together
     determine everything drawn on the output image.
     """
-    boxes = _first_detection(raw_output[0])
-    landmarks = _first_detection(raw_output[3])
+    assert len(raw_output) >= 4, (
+        "Expected raw_output layout (boxes, keypoints, roi_4corners, landmarks, "
+        f"...); got only {len(raw_output)} element(s)."
+    )
+    boxes = _only_image_tensor(raw_output[0])
+    landmarks = _only_image_tensor(raw_output[3])
     return {"boxes": boxes, "landmarks": landmarks}
 
 
@@ -54,8 +64,16 @@ def assert_landmarks_close(
     expected: dict[str, np.ndarray],
     rtol: float = DEFAULT_RTOL,
     atol: float = DEFAULT_ATOL,
+    conf_rtol: float = CONF_RTOL,
+    conf_atol: float = CONF_ATOL,
 ) -> None:
-    """Assert two structured mediapipe outputs match within tolerance."""
+    """Assert two structured mediapipe outputs match within tolerance.
+
+    The first two columns are pixel-space coordinates and use the (loose) pixel
+    tolerance (``rtol``/``atol``); any further column (the landmarks' confidence
+    score) is compared with the tight ``conf_rtol``/``conf_atol`` tolerance so a
+    regression there is not masked.
+    """
     for key in ("boxes", "landmarks"):
         a = np.asarray(actual[key])
         e = np.asarray(expected[key])
@@ -63,5 +81,17 @@ def assert_landmarks_close(
             f"{key}: shape mismatch, actual {a.shape} vs expected {e.shape}."
         )
         np.testing.assert_allclose(
-            a, e, rtol=rtol, atol=atol, err_msg=f"{key} mismatch"
+            a[..., :2],
+            e[..., :2],
+            rtol=rtol,
+            atol=atol,
+            err_msg=f"{key} coordinates mismatch",
         )
+        if a.shape[-1] > 2:
+            np.testing.assert_allclose(
+                a[..., 2:],
+                e[..., 2:],
+                rtol=conf_rtol,
+                atol=conf_atol,
+                err_msg=f"{key} confidence mismatch",
+            )
