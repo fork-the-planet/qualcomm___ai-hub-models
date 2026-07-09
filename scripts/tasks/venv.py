@@ -325,7 +325,10 @@ class SyncLocalQAIHMVenvTask(CompositeTask):
         junit_name: str = "",
         junit_classname: str = "",
     ) -> None:
-        extras_str = f"[{','.join(extras)}]" if extras else ""
+        # Make sure extras name use dashes
+        extras_str = (
+            f"[{','.join(e.replace('_', '-') for e in extras)}]" if extras else ""
+        )
 
         no_build_isolation = flags and (
             "--use-pep517" in flags or "--no-build-isolation" in flags
