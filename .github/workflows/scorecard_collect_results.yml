@@ -205,6 +205,7 @@ jobs:
             name: Scorecard Cached Artifact (Flaky-Job-IDs, ${{ inputs.action_id }})
             path: ${{ env.QAIHM_TEST_ARTIFACTS_DIR }}
 
+      # Per-artifact subdirs (no merge-multiple) so device + LLM accuracy.csv files don't clobber each other before the combine step.
       - name: Download Accuracy Results
         id: download-accuracy-artifact
         if: inputs.action_id != ''
@@ -214,8 +215,7 @@ jobs:
             run-id: ${{ inputs.accuracy_action_id != '' && inputs.accuracy_action_id || inputs.action_id }}
             github-token: ${{ github.token }}
             pattern: "Scorecard Cached Artifact (accuracy.csv, ${{ inputs.action_id }}*)"
-            merge-multiple: true
-            path: ${{ env.QAIHM_TEST_ARTIFACTS_DIR }}
+            path: ${{ github.workspace }}/accuracy-csvs
 
       - name: Download ZIP Assets Results
         id: download-zip-asset-artifact
@@ -289,6 +289,16 @@ jobs:
           hub-private-user-token-staging: ${{ secrets.HUB_PRIVATE_USER_TOKEN_STAGING }}
           hub-private-user-token-dev: ${{ secrets.HUB_PRIVATE_USER_TOKEN_DEV }}
           aws-role-arn: ${{ secrets.QAIHM_CI_AWS_ROLE_ARN }}
+
+      # Concatenate device + LLM/genie accuracy CSVs into the one accuracy.csv that create_perfs_and_numerics reads.
+      - name: Combine Accuracy CSVs
+        id: combine-accuracy-csvs
+        if: ${{ !cancelled() && steps.download-accuracy-artifact.outcome == 'success' }}
+        run: |
+          source "${{ env.VENV_PATH }}/bin/activate"
+          python -m qai_hub_models.scripts.combine_split_artifacts \
+            --input-dir ${{ github.workspace }}/accuracy-csvs \
+            --output-dir ${{ env.QAIHM_TEST_ARTIFACTS_DIR }}
 
       - name: Create Performance and numerics files for models
         id: create-perf-files

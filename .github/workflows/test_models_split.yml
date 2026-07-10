@@ -165,6 +165,7 @@ jobs:
       contents: read
       id-token: write
       packages: read
+      actions: read
     secrets: inherit
     strategy:
       matrix:

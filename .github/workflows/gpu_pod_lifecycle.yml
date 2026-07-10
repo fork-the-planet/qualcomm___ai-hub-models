@@ -295,6 +295,7 @@ jobs:
       id-token: write
       packages: read
       contents: read
+      actions: read
     env:
       HF_TOKEN: ${{ secrets.HUGGINGFACE_TOKEN }}
       GRADER_VENV: ${{ github.workspace }}/grader_env
@@ -384,7 +385,8 @@ jobs:
       if: ${{ !cancelled() && steps.grade_responses.outcome == 'success' }}
       uses: actions/upload-artifact@v7
       with:
-        name: accuracy-csv
+        # Canonical name (run_id = parent scorecard run) so the collector's accuracy glob picks this up; ", genie" keeps it a distinct per-split artifact.
+        name: Scorecard Cached Artifact (accuracy.csv, ${{ github.run_id }}, genie)
         path: ${{ github.workspace }}/qaihm_test_artifacts/accuracy.csv
         if-no-files-found: ignore
 

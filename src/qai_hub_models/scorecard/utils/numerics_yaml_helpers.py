@@ -58,6 +58,7 @@ def create_numerics_struct(
     accuracy_df: pd.DataFrame,
     chipset_registry: dict[str, ScorecardDevice],
     benchmark: NumericsAccuracyBenchmark | None = None,
+    threshold_override: float | None = None,
 ) -> QAIHMModelNumerics | None:
     model_df = accuracy_df[accuracy_df.model_id == model_name]
     if model_df.empty:
@@ -123,7 +124,7 @@ def create_numerics_struct(
         final_data.append(
             QAIHMModelNumerics.MetricDetails(
                 dataset_name=accuracy_metadata.dataset_name,
-                dataset_link=accuracy_metadata.dataset_link,
+                dataset_link=accuracy_metadata.dataset_link or "",
                 dataset_split_description=accuracy_metadata.split_description,
                 metric_name=accuracy_metadata.metric_name,
                 metric_description=accuracy_metadata.metric_description,
@@ -132,7 +133,11 @@ def create_numerics_struct(
                     min=accuracy_metadata.metric_min,
                     max=accuracy_metadata.metric_max,
                 ),
-                metric_enablement_threshold=accuracy_metadata.metric_threshold,
+                metric_enablement_threshold=(
+                    threshold_override
+                    if threshold_override is not None
+                    else accuracy_metadata.metric_threshold
+                ),
                 benchmark_value=bm_value,
                 num_partial_samples=accuracy_metadata.num_samples,
                 partial_torch_metric=torch_accuracy,
@@ -151,10 +156,15 @@ def create_numerics_yaml(
     chipset_registry: dict[str, ScorecardDevice],
     numerics_diff: NumericsDiff | None = None,
     benchmark: NumericsAccuracyBenchmark | None = None,
+    threshold_override: float | None = None,
 ) -> QAIHMModelNumerics | None:
     existing_struct = QAIHMModelNumerics.from_model(model_name, not_exists_ok=True)
     numerics_struct = create_numerics_struct(
-        model_name, accuracy_df, chipset_registry, benchmark=benchmark
+        model_name,
+        accuracy_df,
+        chipset_registry,
+        benchmark=benchmark,
+        threshold_override=threshold_override,
     )
     if numerics_diff is not None:
         numerics_diff.update_summary(

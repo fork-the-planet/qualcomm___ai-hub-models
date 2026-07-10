@@ -700,6 +700,7 @@ if __name__ == "__main__":
                 chipset_registry,
                 model_diff,
                 benchmark=model_info.numerics_benchmark,
+                threshold_override=model_info.code_gen_config.numerics_threshold_override,
             )
             global_numerics_diff.merge_from(model_diff)
             if numerics is None:
@@ -722,13 +723,20 @@ if __name__ == "__main__":
                     # If sync-code-gen is on, save the updated failure reasons to disk.
                     model_info.code_gen_config.to_model_yaml(model_id)
 
-                    # Update perf.yaml to remove failing paths
-                    perf = remove_perf_failures(
-                        perf=QAIHMModelPerf.from_model(model_id, not_exists_ok=True),
-                        failure_reason=model_info.code_gen_config.disabled_paths,
-                    )
-                    perf.apply_similar_devices(load_similar_devices())
-                    perf.to_model_yaml(model_id)
+                    # Do not remove failing paths if frozen or LLM
+                    # LLMs because it is handled by apply_llm_perf_updates.
+                    if (
+                        not model_info.code_gen_config.freeze_perf_yaml
+                        and not model_info.code_gen_config.is_llm
+                    ):
+                        perf = remove_perf_failures(
+                            perf=QAIHMModelPerf.from_model(
+                                model_id, not_exists_ok=True
+                            ),
+                            failure_reason=model_info.code_gen_config.disabled_paths,
+                        )
+                        perf.apply_similar_devices(load_similar_devices())
+                        perf.to_model_yaml(model_id)
 
                     # Un-publish or re-publish the model if needed by updating info.yaml.
                     if update_model_publish_status(model_info):

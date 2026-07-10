@@ -94,6 +94,10 @@ class QAIHMModelCodeGen(BaseQAIHMConfig):
     # If set, changes the default device when running export.py for the model.
     default_device: str = DEFAULT_EXPORT_DEVICE
 
+    # Overrides the scorecard acceptance threshold. E.g., set this to 15 to
+    # allow up to a 15-point drop and still be considered successful.
+    numerics_threshold_override: float | None = None
+
     # Some model outputs have low PSNR when in practice the numerical accuracy is fine.
     # This can happen when the model outputs many low confidence values that get
     # filtered out in post-processing.
@@ -290,6 +294,14 @@ class QAIHMModelCodeGen(BaseQAIHMConfig):
         return None
 
     @property
+    def is_llm(self) -> bool:
+        """
+        True if this model is a large language model and produces perf updates
+        through a QDC workflow.
+        """
+        return self.test_split is TestRunnerSplit.LLM
+
+    @property
     def skips_profile_and_inference(self) -> bool:
         """
         True if this model doesn't have meaningful on-device profile or inference
@@ -298,7 +310,7 @@ class QAIHMModelCodeGen(BaseQAIHMConfig):
         test_torch_accuracy / test_sim_accuracy from test_generated.py for these.
         Scorecard skips perf.yaml writes and runtime-failure updates as well.
         """
-        return self.test_split is TestRunnerSplit.LLM
+        return self.is_llm
 
     @property
     def supports_at_least_1_runtime(self) -> bool:
