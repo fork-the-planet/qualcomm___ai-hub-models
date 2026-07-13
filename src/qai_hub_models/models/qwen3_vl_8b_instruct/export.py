@@ -17,7 +17,6 @@ from qai_hub_models.models.qwen3_vl_8b_instruct import (
     Model,
 )
 from qai_hub_models.utils.args import export_parser
-from qai_hub_models.utils.asset_loaders import check_unpublished_model_warning
 from qai_hub_models.utils.checkpoint import CheckpointType
 from qai_hub_models.utils.export.dispatch import resolve_export_model
 
@@ -52,8 +51,6 @@ def build_parser(cli_mode: bool = False) -> argparse.ArgumentParser:
 
 
 def main(args: argparse.Namespace | None = None) -> None:
-    if not check_unpublished_model_warning():
-        return
     if args is None:
         warnings.warn(
             "Running `python -m qai_hub_models.models.qwen3_vl_8b_instruct.export` is "

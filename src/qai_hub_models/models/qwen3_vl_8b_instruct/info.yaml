@@ -1,7 +1,6 @@
 name: Qwen3-VL-8B-Instruct
 id: qwen3_vl_8b_instruct
-status: unpublished
-status_reason: Collecting performance numbers.
+status: published
 headline: Multimodal 8B vision-language model with enhanced visual reasoning capabilities.
 domain: Generative AI
 description: Qwen3-VL is a vision-language model from Alibaba Cloud capable of understanding both text and images for multimodal reasoning tasks such as visual question answering and image captioning.

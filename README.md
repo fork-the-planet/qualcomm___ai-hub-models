@@ -424,6 +424,7 @@ and many more.
 | [Qwen3-8B](https://aihub.qualcomm.com/models/qwen3_8b) | [qai_hub_models.models.qwen3_8b](src/qai_hub_models/models/qwen3_8b/README.md) |
 | [Qwen3-VL-2B-Instruct](https://aihub.qualcomm.com/models/qwen3_vl_2b_instruct) | [qai_hub_models.models.qwen3_vl_2b_instruct](src/qai_hub_models/models/qwen3_vl_2b_instruct/README.md) |
 | [Qwen3-VL-4B-Instruct](https://aihub.qualcomm.com/models/qwen3_vl_4b_instruct) | [qai_hub_models.models.qwen3_vl_4b_instruct](src/qai_hub_models/models/qwen3_vl_4b_instruct/README.md) |
+| [Qwen3-VL-8B-Instruct](https://aihub.qualcomm.com/models/qwen3_vl_8b_instruct) | [qai_hub_models.models.qwen3_vl_8b_instruct](src/qai_hub_models/models/qwen3_vl_8b_instruct/README.md) |
 | [Qwen3.5-0.8B](https://aihub.qualcomm.com/models/qwen3_5_0_8b) | [qai_hub_models.models.qwen3_5_0_8b](src/qai_hub_models/models/qwen3_5_0_8b/README.md) |
 | [Qwen3.5-2B](https://aihub.qualcomm.com/models/qwen3_5_2b) | [qai_hub_models.models.qwen3_5_2b](src/qai_hub_models/models/qwen3_5_2b/README.md) |
 

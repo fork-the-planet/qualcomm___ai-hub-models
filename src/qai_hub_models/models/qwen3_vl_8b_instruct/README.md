@@ -1,6 +1,3 @@
-> [!WARNING]
-> This model is not published. Use with caution; it may not meet performance/accuracy standards and may not support some runtimes or chipsets/devices. We do not provide support for unpublished models. If this model was previously published, use earlier releases.
-
 # [Qwen3-VL-8B-Instruct: Multimodal 8B vision-language model with enhanced visual reasoning capabilities](https://aihub.qualcomm.com/models/qwen3_vl_8b_instruct)
 
 Qwen3-VL is a vision-language model from Alibaba Cloud capable of understanding both text and images for multimodal reasoning tasks such as visual question answering and image captioning.
