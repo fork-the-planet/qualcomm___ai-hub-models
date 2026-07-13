@@ -57,9 +57,9 @@ class CocoFaceDataset(CocoBodyDatasetBase):
         num_samples: int = -1,
     ) -> None:
         super().__init__(split, input_spec, num_samples)
-        self.kpt_db: list[tuple[Path, int, int, torch.Tensor]]  # type: ignore[assignment]
+        self.kpt_db: list[tuple[Path, int, int, torch.Tensor]]
 
-    def _load_kpt_db(self) -> list[tuple[Path, int, int, torch.Tensor]]:  # type: ignore[override]
+    def _load_kpt_db(self) -> list[tuple[Path, int, int, torch.Tensor]]:
         kpt_db: list[tuple[Path, int, int, torch.Tensor]] = []
         for img_id in self.img_ids:
             img_info = self.cocoGt.loadImgs(img_id)[0]

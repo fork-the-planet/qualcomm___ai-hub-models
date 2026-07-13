@@ -5,8 +5,10 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+from typing import Any
+
 import cv2
-import numpy as np
 import torch
 
 from qai_hub_models.datasets.coco.coco import COCO_VAL_DATASET
@@ -70,7 +72,7 @@ class CocoBodyDatasetBase(BaseDataset):
 
         # Load dataset paths
         self.image_dir = COCO_VAL_DATASET.extracted_path
-        self.annotation_path = COCO_VAL_ANNOTATIONS_ASSET.path
+        self.annotation_path = self._get_annotation_path()
         BaseDataset.__init__(self, self.annotation_path, split)
 
         # Load annotations
@@ -83,7 +85,11 @@ class CocoBodyDatasetBase(BaseDataset):
         self.img_ids: list[int] = sorted(self.cocoGt.getImgIds())
         self.kpt_db = self._load_kpt_db()
 
-    def _load_kpt_db(self) -> list[tuple[str, int, int, np.ndarray, np.ndarray]]:
+    def _get_annotation_path(self) -> Path:
+        """Return the path to the annotation file. Override in subclasses."""
+        return COCO_VAL_ANNOTATIONS_ASSET.path
+
+    def _load_kpt_db(self) -> list[Any]:
         kpt_db = []
         for img_id in self.img_ids:
             img_info = self.cocoGt.loadImgs(img_id)[0]
@@ -152,9 +158,7 @@ class CocoBodyDatasetBase(BaseDataset):
 class CocoBodyDataset(CocoBodyDatasetBase):
     """COCO-WholeBody human pose dataset returning cropped person instances."""
 
-    def __getitem__(
-        self, index: int
-    ) -> tuple[torch.Tensor, tuple[int, int, np.ndarray, np.ndarray]]:
+    def __getitem__(self, index: int) -> tuple[torch.Tensor, Any]:
         """
         Get item in this dataset.
 
@@ -168,7 +172,7 @@ class CocoBodyDataset(CocoBodyDatasetBase):
         image : torch.Tensor
             Input image resized for the network. RGB, floating point range [0-1].
 
-        ground_truth : tuple[int, int, np.ndarray, np.ndarray]
+        ground_truth : Any
             image_id
                 Image ID within the original dataset
             category_id

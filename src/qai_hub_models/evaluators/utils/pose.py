@@ -147,6 +147,13 @@ RIGHTHAND_SIGMAS = [
 ]
 
 
+# OKS-NMS constants — derived from BODY_SIGMAS above.
+# https://cocodataset.org/#keypoints-eval
+_OKS_VARS = (np.array(BODY_SIGMAS) * 2) ** 2
+OKS_THRE = 0.9  # standard OKS-NMS suppression threshold
+IN_VIS_THRE = 0.2  # minimum keypoint visibility score
+
+
 def get_final_preds(
     batch_heatmaps: np.ndarray, center: np.ndarray, scale: np.ndarray
 ) -> tuple[np.ndarray, np.ndarray]:
@@ -260,3 +267,56 @@ def get_max_preds(batch_heatmaps: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     # apply mask
     preds *= pred_mask
     return preds, maxvals
+
+
+def oks_iou(
+    g: np.ndarray,
+    d: np.ndarray,
+    a_g: float,
+    a_d: np.ndarray,
+) -> np.ndarray:
+    """Compute OKS between one GT keypoint set and N detections.
+
+    Parameters
+    ----------
+    g
+        GT keypoints flattened: [x0, y0, v0, ...], shape (51,).
+    d
+        Detected keypoints, shape (N, 51).
+    a_g
+        GT bbox area (pixels^2).
+    a_d
+        Detected bbox areas, shape (N,).
+
+    Returns
+    -------
+    np.ndarray
+        OKS scores, shape (N,).
+    """
+    xg, yg = g[0::3], g[1::3]
+    ious = np.zeros(d.shape[0])
+    for n in range(d.shape[0]):
+        xd, yd = d[n, 0::3], d[n, 1::3]
+        dx, dy = xd - xg, yd - yg
+        e = (dx**2 + dy**2) / _OKS_VARS / ((a_g + a_d[n]) / 2 + np.spacing(1)) / 2
+        ious[n] = np.sum(np.exp(-e)) / e.shape[0]
+    return ious
+
+
+def oks_nms(kpts_db: list[dict]) -> list[int]:
+    """Greedy OKS-NMS — returns indices of kept predictions."""
+    if not kpts_db:
+        return []
+    scores = np.array([k["score"] for k in kpts_db])
+    kpts = np.array([np.array(k["keypoints"]).flatten() for k in kpts_db])
+    areas = np.array([k["area"] for k in kpts_db])
+    order = scores.argsort()[::-1]
+    keep: list[int] = []
+    while order.size > 0:
+        i = int(order[0])
+        keep.append(i)
+        if order.size == 1:
+            break
+        ious = oks_iou(kpts[i], kpts[order[1:]], areas[i], areas[order[1:]])
+        order = order[1:][ious <= OKS_THRE]
+    return keep

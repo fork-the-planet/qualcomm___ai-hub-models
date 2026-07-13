@@ -17,10 +17,11 @@ from functools import cached_property
 from pathlib import Path
 from typing import Any, NamedTuple, final
 
-from torch.utils.data import Dataset, default_collate
+from torch.utils.data import DataLoader, Dataset, Subset, default_collate
 
 from qai_hub_models.utils.input_spec import InputSpec
 from qai_hub_models.utils.kwarg_helpers import cli_friendly_class_name
+from qai_hub_models.utils.samplers import EveryNSampler
 
 __all__ = [
     "AugmentedLabelDataset",
@@ -194,6 +195,34 @@ class BaseDataset(Dataset, Sized, ABC):
             f"{cls.__name__} does not require external configuration. "
             "If this dataset can be auto-downloaded, just instantiate it; "
             "otherwise the dataset author should override `configure()`."
+        )
+
+    def get_dataloader(
+        self, num_samples: int, samples_per_job: int | None = None
+    ) -> DataLoader:
+        """Return a DataLoader with num_samples evenly spaced across the dataset.
+
+        Override in datasets where samples must be grouped (e.g. all crops for
+        an image must appear together for correct mAP computation).
+
+        Parameters
+        ----------
+        num_samples
+            Number of samples to include.
+        samples_per_job
+            Batch size for the DataLoader. If None, all samples are in one batch.
+
+        Returns
+        -------
+        DataLoader
+            DataLoader containing the sampled subset.
+        """
+        n = max(1, len(self) // max(1, num_samples))
+        sampler = EveryNSampler(n=n, num_samples=min(num_samples, len(self)))
+        return DataLoader(
+            Subset(self, list(sampler)),
+            batch_size=samples_per_job or num_samples,
+            collate_fn=self.collate_fn,
         )
 
 

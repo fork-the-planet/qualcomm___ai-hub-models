@@ -12,7 +12,7 @@ import math
 import os
 import shutil
 from collections import defaultdict
-from collections.abc import Callable, Iterator, Mapping, Sized
+from collections.abc import Callable, Mapping, Sized
 from dataclasses import dataclass
 from enum import Enum, unique
 from pathlib import Path
@@ -25,7 +25,7 @@ import qai_hub as hub
 import torch
 from qai_hub.public_rest_api import DatasetEntries
 from qai_hub.util.dataset_entries_converters import dataset_entries_to_h5
-from torch.utils.data import DataLoader, Dataset, Sampler, random_split
+from torch.utils.data import DataLoader, Dataset, random_split
 from tqdm import tqdm
 from typing_extensions import Self
 
@@ -122,20 +122,6 @@ def write_entries_to_file(
         dataset_entries_to_h5(dataset_entries, h5f)
 
 
-class EveryNSampler(Sampler):
-    """Samples every N samples deterministically from a torch dataset."""
-
-    def __init__(self, n: int, num_samples: int) -> None:
-        self.n = n
-        self.num_samples = num_samples
-
-    def __iter__(self) -> Iterator[int]:
-        return iter(range(0, self.num_samples * self.n, self.n))
-
-    def __len__(self) -> int:
-        return self.num_samples
-
-
 def get_deterministic_sample(
     dataset: BaseDataset, num_samples: int, samples_per_job: int | None = None
 ) -> DataLoader:
@@ -159,12 +145,7 @@ def get_deterministic_sample(
     dataloader : DataLoader
         Dataloader with sampled data.
     """
-    samples_per_job = samples_per_job or num_samples
-    if num_samples < len(dataset) and num_samples != -1:
-        sampler = EveryNSampler(n=len(dataset) // num_samples, num_samples=num_samples)
-    else:
-        sampler = None
-    return DataLoader(dataset, batch_size=samples_per_job, sampler=sampler)
+    return dataset.get_dataloader(num_samples, samples_per_job)
 
 
 def get_torch_val_dataloader(
@@ -929,7 +910,13 @@ def evaluate_on_dataset(
                 source_torch_dataset, num_samples, samples_per_job
             )
 
-    print(f"Evaluating on {num_samples} samples.")
+    actual_samples = len(dataloader.dataset)  # type: ignore[arg-type]
+    if actual_samples != num_samples and num_samples not in (-1, actual_samples):
+        print(
+            f"Evaluating on {actual_samples} samples (requested {num_samples}; rounded up to include complete images)."
+        )
+    else:
+        print(f"Evaluating on {actual_samples} samples.")
 
     results = evaluate(
         dataloader,
