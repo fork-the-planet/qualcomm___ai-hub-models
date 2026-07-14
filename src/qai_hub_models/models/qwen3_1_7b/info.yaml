@@ -40,7 +40,6 @@ llm_details:
   devices: {}
 runtime_technical_details:
   geniex_qairt:
-    model_infer_id: ai-hub-models/Qwen3-1.7B
     Input sequence length for Prompt Processor: '128'
     Context lengths: '512, 1024, 2048, 3072, 4096'
     Minimum QNN SDK version required: 2.45.0
