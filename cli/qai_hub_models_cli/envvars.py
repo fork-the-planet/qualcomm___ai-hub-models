@@ -25,6 +25,12 @@ Requires valid AWS credentials (profile: qaihm) and the [internal] extra.
 """
 USE_INTERNAL_RELEASES_ENVVAR = "QAIHM_CLI_USE_INTERNAL_RELEASES"
 
+"""
+If set, overrides the default AWS session duration (seconds) written into
+``~/.saml2aws`` by ``validate_credentials``. Clamped to [3600, 28800].
+"""
+AWS_SESSION_DURATION_ENVVAR = "QAIHM_AWS_SESSION_DURATION"
+
 
 def bool_envvar_value(envvar: str, default: bool = False) -> bool:
     return os.environ.get(envvar, "1" if default else "0").lower() in [

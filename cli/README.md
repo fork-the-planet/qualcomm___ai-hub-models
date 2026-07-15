@@ -89,6 +89,19 @@ These flags are shared across most commands:
 Some filters and table columns require a recent release — the CLI tells you when
 one isn't available for the targeted version.
 
+## Environment variables
+
+| Variable | Description |
+| --- | --- |
+| `QAIHM_AWS_SESSION_DURATION` | Overrides the AWS session duration (seconds) written into `~/.saml2aws` by `validate_aws_credentials`. Clamped to `[3600, 28800]` (1h–8h). Useful for long-running headless callers whose runs exceed the 1h default. Only applies when using the `[internal]` extra. |
+
+Set before running `validate_aws_credentials`:
+
+```bash
+export QAIHM_AWS_SESSION_DURATION=28800
+validate_aws_credentials
+```
+
 ## Filtering
 
 The starred commands above accept these filter flags (run

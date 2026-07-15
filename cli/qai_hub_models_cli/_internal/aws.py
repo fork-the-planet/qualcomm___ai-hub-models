@@ -19,7 +19,7 @@ from typing import TypeVar
 import tqdm
 
 from qai_hub_models_cli.common import sample_command
-from qai_hub_models_cli.envvars import bool_envvar_value
+from qai_hub_models_cli.envvars import AWS_SESSION_DURATION_ENVVAR, bool_envvar_value
 
 try:
     import boto3
@@ -36,7 +36,27 @@ CallableRetT = TypeVar("CallableRetT")
 QAIHM_PRIVATE_S3_BUCKET = "qai-hub-models-private-assets"
 QAIHM_AWS_PROFILE = "qaihm"
 REGION = "us-west-2"
-SESSION_DURATION = 3600
+DEFAULT_SESSION_DURATION = 3600
+MIN_SESSION_DURATION = 3600
+MAX_SESSION_DURATION = 28800
+
+
+def _get_session_duration() -> int:
+    """Resolve AWS session duration from the envvar, clamped to IT limits.
+
+    Invalid or missing values fall back to the default; out-of-range values
+    are clamped rather than rejected so a caller who asks for "as long as
+    possible" gets the ceiling instead of an error.
+    """
+    raw = os.environ.get(AWS_SESSION_DURATION_ENVVAR)
+    if not raw:
+        return DEFAULT_SESSION_DURATION
+    try:
+        value = int(raw)
+    except ValueError:
+        return DEFAULT_SESSION_DURATION
+    return max(MIN_SESSION_DURATION, min(value, MAX_SESSION_DURATION))
+
 
 SETUP_DOCS_URL = "https://qualcomm-confluence.atlassian.net/wiki/spaces/ML/pages/3188064594/Private+AWS+Access+Setup"
 
@@ -138,7 +158,7 @@ def _create_saml2aws_config(account_id: str, role: str, idp_app_id: str) -> None
             f"skip_verify             = false\n"
             f"timeout                 = 0\n"
             f"aws_urn                 = urn:amazon:webservices\n"
-            f"aws_session_duration    = {SESSION_DURATION}\n"
+            f"aws_session_duration    = {_get_session_duration()}\n"
             f"aws_profile             = {QAIHM_AWS_PROFILE}\n"
             f"role_arn                = arn:aws:iam::{account_id}:role/{role}\n"
             f"region                  = {REGION}\n"
