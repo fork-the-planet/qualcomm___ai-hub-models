@@ -117,13 +117,53 @@ Pick exactly one `status`:
 | `answered` | A Qualcomm engineer posted a substantive answer (named a fix, gave a number, pointed at a file/doc/release, redirected with concrete next step). | Reviewer would read this and say "no follow-up needed." |
 | `internal-noise` | The "question" is internal chatter, a bump, a bot post, or otherwise not a real customer question. | Anything that slipped past the scraper filter. |
 
-**Substantive vs ack — quick heuristic:**
-- "got it, looking" / "checking with X" / "let me find someone" → `ack-only`
-- "use v0.56.0", "set --target-runtime onnx", "see <link>", "fixed in #1234",
-  "that model isn't supported on X chip" → `answered`
-- A reply that asks the customer for more info → `ack-only`
-- A reply containing a number, file path, URL, or specific command →
-  almost always `answered`.
+**Substantive vs ack — read every internal reply for intent, not keywords.**
+
+Before applying any keyword shortcut, decide what each internal reply is
+*doing*. Every reply falls into exactly one bucket:
+
+1. **Handoff / routing** — an internal user pings another engineer to
+   answer. Signature: contains a Slack `@mention` (`<@UXXX>`) AND a
+   routing verb: "chime in", "any chance you can help", "take a look",
+   "can you look at this", "please help", "assist", "point to the right
+   person", "who can answer this". A handoff is **always** `ack-only`
+   contribution — **even if the same message also contains a URL, a
+   version number, or a channel name.** The URL is context for the
+   pinged engineer, not an answer to the customer.
+2. **Ack / info-gathering** — "got it, looking", "checking with X",
+   "let me find someone", or a reply that asks the customer for more
+   info ("what QAIRT version?", "which device?"). `ack-only`
+   contribution.
+3. **Redirect** — "please ask in <Discord / other Slack channel /
+   forum>" without also answering the question. `ack-only` unless the
+   customer's question was literally "where do I ask?" (in which case
+   the redirect IS the answer).
+4. **Substantive answer** — names a fix, gives a specific number,
+   links a doc/PR/release that directly resolves the question, gives a
+   specific command/flag, or definitively says "not supported on X".
+
+**Per-thread rule:** the thread is `answered` **only if at least one
+internal reply is bucket #4.** If every internal reply is #1, #2, or #3,
+the thread is `ack-only`. `no-reply` is reserved for zero internal
+replies.
+
+**Common false-positive traps (all → `ack-only`, NOT `answered`):**
+- Handoff that also cites a URL for the pinged engineer's reference
+  (e.g. "<@Eng> any chance you can help — see this thread"). The URL
+  isn't answering the customer.
+- Redirect to Discord / Qualcomm Developer forum / another Slack
+  channel when the customer's technical question is still open.
+- A reply that only lists next-step questions to ask the customer —
+  that's info-gathering, not an answer.
+- Multiple handoffs stacked in one message (e.g. `<@A> <@B> can one of
+  you chime in`). Still `ack-only` regardless of URL count.
+
+**Only after ruling out #1–#3 for every internal reply**, apply keyword
+shortcuts to confirm bucket #4:
+- "use v0.56.0", "set --target-runtime onnx", "fixed in #1234",
+  "that model isn't supported on X chip" → substantive answer.
+- A reply containing a specific number, file path, URL, or command
+  **without** handoff / redirect signals → substantive answer.
 
 **Age calculation:** compute `age_hours` as the integer hours between
 `submitted_at` and the current UTC time. Treat any parse failure as `0`.
@@ -285,3 +325,9 @@ Thread replies: `[]`.
 KB match: `faq-sa8295-bq-not-supported`
 → `status: no-reply`, `topic: "sa8295 export"`, `draft_answer: "Upgrade to QAIRT 2.45 or later. The 'BQ is not supported' error on SA8295 (v68) was resolved in 2.45; not a model issue, a QAIRT version gap."`,
 `kb_citation: "faq-sa8295-bq-not-supported"`, `confidence: "high"`.
+
+**Question:** "How do I derive the 100 Dense INT8 TOPS spec for the IQ-9075 from profiler metrics?"
+Thread replies: `[{user: "Czar", is_internal: true, text: "<@Eng> any chance you can help here? <@customer> since this is device-specific, you'll likely have better luck asking in Qualcomm Developers Discord (https://discord.com/invite/qualcommdevelopernetwork)."}]`
+→ `status: ack-only` (handoff + redirect, no substantive answer). The
+Discord URL is a redirect, not an answer to the TOPS math. `topic: "tops
+derivation"`, `draft_answer: null`, `kb_citation: null`.
