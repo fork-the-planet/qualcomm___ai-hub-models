@@ -130,7 +130,7 @@ def test_load_encodings_to_quantsim(checkpoint: str) -> None:
     [
         pytest.param("DEFAULT_W4A16", "wikitext", 13.72, 0, marks=pytest.mark.nightly),
         ("DEFAULT_W4A16", "mmlu", 0.646, 1000),
-        ("DEFAULT_UNQUANTIZED", "wikitext", 12.41, 0),
+        ("DEFAULT_UNQUANTIZED", "wikitext", 12.76, 0),
         ("DEFAULT_UNQUANTIZED", "tiny_mmlu", 0.72, 0),
     ],
 )
@@ -153,13 +153,12 @@ def test_evaluate(
     extra_kwargs = (
         {"_skip_quantsim_creation": False, "fp_model": None} if is_unquantized else {}
     )
-    # Unquantized FP baseline is the monolithic PreSplit (torch forward); the
-    # split-Parts ONNX path shifts WikiText PPL (12.41 -> 12.76). W4A16 keeps
-    # the split wrapper since that's the production on-device graph.
-    fp_model_cls = Qwen3_4B_PreSplit if is_unquantized else FPSplitModelWrapper
+    # Both FP and W4A16 run through the split-Parts wrapper so the reported
+    # degradation isolates the pure quantization effect (matches the Llama 3.2
+    # split models).
     actual_metric, _ = evaluate(
         quantized_model_cls=QuantizedSplitModelWrapper,
-        fp_model_cls=fp_model_cls,
+        fp_model_cls=FPSplitModelWrapper,
         qnn_model_cls=LLM_QNN,  # type: ignore[type-abstract]
         num_samples=num_samples,
         dataset_cls=dataset_cls,

@@ -54,7 +54,7 @@ from qai_hub_models.utils.asset_loaders import ASSET_CONFIG
 from qai_hub_models.utils.checkpoint import CheckpointSpec
 from qai_hub_models.utils.export.result import MultiGraphCollectionExportResult
 
-DEFAULT_EVAL_SEQLEN = 2048
+DEFAULT_EVAL_SEQLEN = [2048, 128, 1]
 
 
 @pytest.mark.unmarked
@@ -171,6 +171,9 @@ def test_evaluate(
     extra_kwargs = (
         {"_skip_quantsim_creation": False, "fp_model": None} if is_unquantized else {}
     )
+    # Both FP and W4A16 run through the split-Parts wrapper so the reported
+    # degradation isolates the pure quantization effect (matches the Llama 3.2
+    # split models).
     # The prompt-generation task persists responses and grades them; everything
     # else scores a forward-only metric inline.
     task_kwargs = {"output_dir": str(tmp_path)} if task == "prompts" else None
@@ -180,10 +183,10 @@ def test_evaluate(
         qnn_model_cls=LLM_QNN,  # type: ignore[type-abstract]
         num_samples=num_samples,
         dataset_cls=dataset_cls,
+        prompt_sequence_length=DEFAULT_EVAL_SEQLEN,
+        context_length=DEFAULT_CONTEXT_LENGTH,
         kwargs=dict(
             checkpoint=checkpoint,
-            sequence_length=DEFAULT_EVAL_SEQLEN,
-            context_length=DEFAULT_CONTEXT_LENGTH,
             **extra_kwargs,
         ),
         task_kwargs=task_kwargs,

@@ -152,6 +152,9 @@ def test_evaluate(
     extra_kwargs = (
         {"_skip_quantsim_creation": False, "fp_model": None} if is_unquantized else {}
     )
+    # Both FP and W4A16 run through the split-Parts wrapper so the reported
+    # degradation isolates the pure quantization effect (matches the Llama 3.2
+    # split models).
     actual_metric, _ = evaluate(
         quantized_model_cls=QuantizedSplitModelWrapper,
         fp_model_cls=FPSplitModelWrapper,
